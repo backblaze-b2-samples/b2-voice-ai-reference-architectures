@@ -6,6 +6,7 @@ Canonical Backblaze product documentation: https://www.backblaze.com/docs/cloud-
 
 ## Start here
 
+- [Voice and speech AI overview](docs/voice-speech-ai.md): What the architectures cover, where B2 fits and where it does not, when to use them, and FAQ.
 - [Architecture index](docs/architecture-index.md): Human-readable index generated from the catalog.
 - [Machine-readable catalog](catalog/architectures.yaml): Audiences, workflows, boundaries, capabilities, evidence, security and resource links.
 - [B2 capability map](docs/b2-capabilities.md): What each B2 capability does, what it requires, its limitations and which architecture uses it.
@@ -40,3 +41,4 @@ Canonical Backblaze product documentation: https://www.backblaze.com/docs/cloud-
 ## Optional
 
 - [Repository agent guide](AGENTS.md): Source hierarchy, generation commands and operational invariants.
+- [Portable agent skill](skill/SKILL.md): Self-contained guidance for B2 voice and speech AI architecture work.

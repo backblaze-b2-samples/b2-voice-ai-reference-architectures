@@ -46,11 +46,13 @@ Each architecture folder holds `architecture.md` (data flow, boundaries, where B
 | [`catalog/architectures.yaml`](catalog/architectures.yaml) | Machine-readable catalog: audiences, workflows, boundaries, capabilities, integrations, evidence and links |
 | [`docs/b2-capabilities.md`](docs/b2-capabilities.md) | B2 capability map: what each capability does, what it requires, its limitations and which architecture uses it |
 | [`docs/architecture-index.md`](docs/architecture-index.md) | Index of the architectures, generated from the catalog |
+| [`docs/voice-speech-ai.md`](docs/voice-speech-ai.md) | Category page: what the architectures cover, where B2 fits and does not, standard B2 versus Overdrive, when to use, when not to use, FAQ |
+| [`applications/`](applications/README.md) | Sample applications that implement the architectures, and how each entry is described |
 | [`examples/`](examples/README.md) | B2 configuration templates (CORS, lifecycle, Event Notifications, Object Lock, replication, encryption), scoped key commands, and Python and TypeScript code examples |
 | [`infrastructure/`](infrastructure/README.md) | LiveKit Egress output to B2, and provisioning of per-zone buckets and scoped keys |
 | [`schemas/`](schemas/) and [`manifests/`](manifests/) | JSON Schemas for session, generation job, consent, dataset line, release and delivery manifests, with valid examples |
 | [`testdata/synthetic-speech/`](testdata/synthetic-speech/README.md) | Synthetic speech fixtures, including deliberately invalid clips; no recording of a real person |
-| [`skill/`](skill/) | Agent skill material generated from the catalog |
+| [`skill/`](skill/SKILL.md) | The `b2-voice-speech-ai` agent skill and its references; `skill/references/architecture-catalog.md` is generated from the catalog |
 | [`metadata/`](metadata/README.md) | Where the repository's citation and discovery metadata lives |
 | [`tools/`](tools/) | Catalog generator, validators, link check, fixture builder and diagram renderer |
 | [`tests/`](tests/) | Tests that run without a B2 account |

@@ -18,12 +18,13 @@ State the evidence basis when it matters to a recommendation. Documentation revi
 |---|---|
 | `architectures/` | One folder per architecture |
 | `catalog/` | The architecture and integration catalog |
-| `docs/` | Capability map, generated architecture index, overview diagram (`docs/images/`) |
+| `docs/` | Category page (`voice-speech-ai.md`), capability map, generated architecture index, overview diagram (`docs/images/`) |
 | `examples/` | B2 configuration templates (JSON), scoped key commands, Python (`examples/python/`) and TypeScript (`examples/typescript/`) examples |
 | `infrastructure/` | LiveKit Egress request template and the bucket and key provisioning helper |
 | `schemas/`, `manifests/` | JSON Schemas and valid example manifests |
 | `testdata/synthetic-speech/` | Synthetic speech fixtures, valid and deliberately invalid |
-| `skill/` | Agent skill material; `skill/references/architecture-catalog.md` is generated |
+| `skill/` | The `b2-voice-speech-ai` agent skill (`SKILL.md`, `references/`); `skill/references/architecture-catalog.md` is generated |
+| `applications/` | Sample applications that implement the architectures (the page lists none yet) |
 | `metadata/` | Index of the repository's metadata files |
 | `tools/` | Generator, validators, link check, fixture builder, diagram renderer |
 | `tests/` | Tests that run without a B2 account |
