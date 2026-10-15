@@ -1,4 +1,145 @@
 schema_version: 1.0.0
 updated: "2026-10-15"
 canonical_documentation: https://www.backblaze.com/docs/cloud-storage-ai-machine-learning
-architectures: []
+architectures:
+  - id: voice-training-data-lifecycle
+    name: Voice training data lifecycle
+    slug: voice-training-data-lifecycle
+    summary: Collect speech with consent, validate and review it, and publish immutable dataset releases that NeMo, Lhotse, Hugging Face Datasets, WebDataset and MosaicML Streaming read from B2.
+    audience:
+      - ML engineers
+      - Data engineers
+      - Speech and audio researchers
+      - Platform engineers
+    problem: Speech datasets need a record of consent per clip, repeatable validation, reviewed transcripts and versioned releases that training jobs in other locations can read and cite exactly.
+    workflow:
+      - Record consent in the protected zone
+      - Upload clips with presigned PUT URLs
+      - Validate and normalize on signed Event Notifications
+      - Review transcripts in Label Studio
+      - Build an immutable release with manifests and shards
+      - Read the release through a local cache for training
+    boundaries:
+      - real-time-voice-transport
+      - low-latency-session-store
+      - message-queue
+      - transcription-or-voice-model
+      - workflow-orchestrator
+      - metadata-catalog
+      - vector-database
+      - gpu-cache-or-training-storage
+    capabilities:
+      - S3-compatible API
+      - Presigned URLs and CORS
+      - Multipart upload with resume
+      - Application keys with limited scope
+      - Event Notifications with a signed, idempotent webhook
+      - Versions and lifecycle rules
+      - Server-side encryption
+      - Object Lock
+      - Cloud Replication
+      - Included egress and compute partners
+      - Local processing or GPU cache
+      - B2 Overdrive for sustained reads only
+    integrations:
+      - id: nemo
+        name: NVIDIA NeMo
+        role: Speech model training on NeMo JSONL manifests
+        connection: Reads releases through its Lhotse data loader, or from a local copy; its own object-store support is documented for AIStore
+        connection_type: application-copy
+        url: https://docs.nvidia.com/nemo-framework/user-guide/latest/nemotoolkit/asr/datasets.html
+        evidence: NeMo ASR datasets documentation, read 2026-10-15
+      - id: lhotse
+        name: Lhotse
+        role: Speech data loading from Lhotse Shar shards
+        connection: Shard sources given as pipe commands with an S3 client and the B2 endpoint, or as s3 URIs opened through smart_open
+        connection_type: native-s3-output
+        url: https://github.com/lhotse-speech/lhotse
+        evidence: CutSet.from_shar and open_best source docstrings, read 2026-10-15
+      - id: webdataset
+        name: WebDataset
+        role: Tar-shard data loading
+        connection: Shard URLs as pipe commands with an S3 client and the B2 endpoint, or presigned https URLs read with curl
+        connection_type: native-s3-output
+        url: https://github.com/webdataset/webdataset
+        evidence: README and URL scheme table in gopen.py, read 2026-10-15
+      - id: huggingface-datasets
+        name: Hugging Face Datasets
+        role: Dataset loading and streaming from JSON or WebDataset files
+        connection: storage_options passed to the s3fs backend with the B2 endpoint_url
+        connection_type: native-s3-output
+        url: https://huggingface.co/docs/datasets/package_reference/loading_methods
+        evidence: Loading methods reference and s3fs documentation, read 2026-10-15
+      - id: mosaicml-streaming
+        name: MosaicML Streaming
+        role: Streaming MDS shards into a local cache during training
+        connection: S3_ENDPOINT_URL set to the B2 S3 endpoint; remote s3 path and local cache directory
+        connection_type: native-s3-output
+        url: https://docs.mosaicml.com/projects/streaming/en/stable/how_to_guides/configure_cloud_storage_credentials.html
+        evidence: Cloud storage credentials guide lists Backblaze B2, read 2026-10-15
+      - id: label-studio
+        name: Label Studio
+        role: Transcript and label review
+        connection: Amazon S3 storage type with the S3 endpoint field set to B2; source storage with pre-signed URLs and target storage for annotations
+        connection_type: native-s3-output
+        url: https://labelstud.io/guide/storage_s3
+        evidence: Amazon S3 storage guide, read 2026-10-15
+      - id: mlflow
+        name: MLflow
+        role: Experiment tracking and artifact storage
+        connection: Artifact root on an s3 path with MLFLOW_S3_ENDPOINT_URL set to the B2 S3 endpoint
+        connection_type: native-s3-output
+        url: https://mlflow.org/docs/latest/self-hosting/architecture/artifact-store/
+        evidence: Artifact store documentation, read 2026-10-15
+      - id: dvc
+        name: DVC
+        role: Data versioning pinned by Git commits
+        connection: S3 remote with endpointurl set to the B2 S3 endpoint
+        connection_type: native-s3-output
+        url: https://doc.dvc.org/user-guide/data-management/remote-storage/amazon-s3
+        evidence: Amazon S3 remote documentation, read 2026-10-15
+    prerequisites:
+      - A B2 account with four private buckets, one per zone
+      - Event Notifications enabled for the account, or a polling fallback
+      - A queue or job runner outside B2
+      - A consent service and a validation worker
+      - Local disk or a cluster cache on the training hosts
+    expected_scale:
+      profile: From thousands of clips to multi-terabyte speech corpora
+      notes: Collection and review run at any scale on standard B2. Training reads go through a local cache; B2 Overdrive applies only when sustained aggregate read throughput is the measured constraint.
+    validation:
+      status: documentation-reviewed
+      date: "2026-10-15"
+      methods:
+        - Third-party behavior checked against each tool's official documentation or source code on 2026-10-15
+        - B2 behavior checked against the Backblaze documentation linked from the capability map
+        - Release manifest example validated against its schema and recomputed from the synthetic fixtures in CI
+      evidence:
+        - architectures/voice-training-data-lifecycle/architecture.md
+        - docs/b2-capabilities.md
+        - https://docs.nvidia.com/nemo-framework/user-guide/latest/nemotoolkit/asr/datasets.html
+        - https://github.com/lhotse-speech/lhotse/blob/master/lhotse/cut/set.py
+        - https://github.com/webdataset/webdataset
+        - https://huggingface.co/docs/datasets/package_reference/loading_methods
+        - https://docs.mosaicml.com/projects/streaming/en/stable/how_to_guides/configure_cloud_storage_credentials.html
+        - https://labelstud.io/guide/storage_s3
+        - https://mlflow.org/docs/latest/self-hosting/architecture/artifact-store/
+        - https://doc.dvc.org/user-guide/data-management/remote-storage/amazon-s3
+    security_considerations:
+      - One application key per component and prefix, read-only and expiring for training jobs
+      - Presigned PUT URLs for one object with a short expiry
+      - Webhook signature verified on the raw body and each eventId processed once
+      - SSE-B2 default encryption; object names and metadata carry pseudonymous ids only
+      - CORS limited to the contributor app and Label Studio origins
+    compliance_considerations:
+      - Consent recorded before upload and kept under Object Lock in governance mode
+      - Consent withdrawal excludes the speaker from later releases and allows affected releases to be removed
+      - Transcripts redacted for personal data before review
+      - Retention per zone through lifecycle rules and Object Lock
+      - Provenance from clip hash and consent id to release fingerprint and training run
+    links:
+      architecture: architectures/voice-training-data-lifecycle/architecture.md
+      application: null
+      deployment: infrastructure/b2-provisioning/README.md
+      sample_data: testdata/synthetic-speech/README.md
+      release_contract: schemas/release-manifest.schema.json

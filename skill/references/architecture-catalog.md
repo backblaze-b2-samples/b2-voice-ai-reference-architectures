@@ -2,3 +2,21 @@
 # Architecture catalog
 
 Evidence catalog date: 2026-10-15. For changing B2 product details, use <https://www.backblaze.com/docs/cloud-storage-ai-machine-learning> as the authority.
+
+## Voice training data lifecycle
+
+Collect speech with consent, validate and review it, and publish immutable dataset releases that NeMo, Lhotse, Hugging Face Datasets, WebDataset and MosaicML Streaming read from B2.
+
+**Use when:** Speech datasets need a record of consent per clip, repeatable validation, reviewed transcripts and versioned releases that training jobs in other locations can read and cite exactly.
+
+**Workflow:** Record consent in the protected zone -> Upload clips with presigned PUT URLs -> Validate and normalize on signed Event Notifications -> Review transcripts in Label Studio -> Build an immutable release with manifests and shards -> Read the release through a local cache for training
+
+**B2 capabilities:** S3-compatible API, Presigned URLs and CORS, Multipart upload with resume, Application keys with limited scope, Event Notifications with a signed, idempotent webhook, Versions and lifecycle rules, Server-side encryption, Object Lock, Cloud Replication, Included egress and compute partners, Local processing or GPU cache, B2 Overdrive for sustained reads only.
+
+**Integrations:** [NVIDIA NeMo](https://docs.nvidia.com/nemo-framework/user-guide/latest/nemotoolkit/asr/datasets.html) (application copies data to or from b2): Reads releases through its Lhotse data loader, or from a local copy; its own object-store support is documented for AIStore; [Lhotse](https://github.com/lhotse-speech/lhotse) (provider uses an s3-compatible endpoint): Shard sources given as pipe commands with an S3 client and the B2 endpoint, or as s3 URIs opened through smart_open; [WebDataset](https://github.com/webdataset/webdataset) (provider uses an s3-compatible endpoint): Shard URLs as pipe commands with an S3 client and the B2 endpoint, or presigned https URLs read with curl; [Hugging Face Datasets](https://huggingface.co/docs/datasets/package_reference/loading_methods) (provider uses an s3-compatible endpoint): storage_options passed to the s3fs backend with the B2 endpoint_url; [MosaicML Streaming](https://docs.mosaicml.com/projects/streaming/en/stable/how_to_guides/configure_cloud_storage_credentials.html) (provider uses an s3-compatible endpoint): S3_ENDPOINT_URL set to the B2 S3 endpoint; remote s3 path and local cache directory; [Label Studio](https://labelstud.io/guide/storage_s3) (provider uses an s3-compatible endpoint): Amazon S3 storage type with the S3 endpoint field set to B2; source storage with pre-signed URLs and target storage for annotations; [MLflow](https://mlflow.org/docs/latest/self-hosting/architecture/artifact-store/) (provider uses an s3-compatible endpoint): Artifact root on an s3 path with MLFLOW_S3_ENDPOINT_URL set to the B2 S3 endpoint; [DVC](https://doc.dvc.org/user-guide/data-management/remote-storage/amazon-s3) (provider uses an s3-compatible endpoint): S3 remote with endpointurl set to the B2 S3 endpoint.
+
+**Scale:** From thousands of clips to multi-terabyte speech corpora. Collection and review run at any scale on standard B2. Training reads go through a local cache; B2 Overdrive applies only when sustained aggregate read throughput is the measured constraint.
+
+**Security:** One application key per component and prefix, read-only and expiring for training jobs; Presigned PUT URLs for one object with a short expiry; Webhook signature verified on the raw body and each eventId processed once; SSE-B2 default encryption; object names and metadata carry pseudonymous ids only; CORS limited to the contributor app and Label Studio origins.
+
+**Evidence basis:** Third-party behavior checked against each tool's official documentation or source code on 2026-10-15; B2 behavior checked against the Backblaze documentation linked from the capability map; Release manifest example validated against its schema and recomputed from the synthetic fixtures in CI.

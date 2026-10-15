@@ -1,0 +1,109 @@
+{
+  "schema_version": "1.0.0",
+  "id": "synthetic-speech@v1",
+  "dataset": "synthetic-speech",
+  "version": "v1",
+  "manifest_format": "nemo-jsonl",
+  "modalities": [
+    "audio",
+    "text"
+  ],
+  "license": "MIT",
+  "provenance": {
+    "source_type": "synthetic",
+    "generated_by": "tools/make_fixtures.py",
+    "inputs": [
+      "Kokoro-82M through kokoro-onnx 0.6.1",
+      "consents/consent_spk_a.json",
+      "consents/consent_spk_b.json"
+    ]
+  },
+  "quality": {
+    "status": "passed",
+    "validator": "tools/validate_contracts.py",
+    "checks": [
+      "dataset-line-schema",
+      "sample-rate",
+      "channels",
+      "bit-depth",
+      "minimum-duration",
+      "not-silent",
+      "not-clipped",
+      "not-truncated",
+      "duration-matches-header",
+      "sha256-matches-file",
+      "active-consent-per-line"
+    ]
+  },
+  "statistics": {
+    "file_count": 10,
+    "total_bytes": 786144
+  },
+  "integrity": {
+    "algorithm": "sha256",
+    "content_fingerprint": "fcc43182ac48229d2410ddc75302f175446ca585e339d53fa4d9c558f213e4c2"
+  },
+  "fingerprint": "fcc43182ac48229d2410ddc75302f175446ca585e339d53fa4d9c558f213e4c2",
+  "files": [
+    {
+      "path": "audio/utt_0001.wav",
+      "size": 88792,
+      "sha256": "7202ed5672f0e0a6111e669150c1368ca4542d1df1071356c8479566de6630f0",
+      "encoding_format": "audio/wav"
+    },
+    {
+      "path": "audio/utt_0002.wav",
+      "size": 95618,
+      "sha256": "c9f7d293787c9db9107543af334cfd7d73c6719dfb63a17d9f63c016b25e1b5d",
+      "encoding_format": "audio/wav"
+    },
+    {
+      "path": "audio/utt_0003.wav",
+      "size": 107906,
+      "sha256": "7612ff6fa8ff2c38239d4afb0ec32e7b2846f8c90bd24c99291ff5b72cfee5b7",
+      "encoding_format": "audio/wav"
+    },
+    {
+      "path": "audio/utt_0004.wav",
+      "size": 90840,
+      "sha256": "06c129ddba52f45b5a78210b77e624f2efd447c36f3f87c8a507b782652bbe99",
+      "encoding_format": "audio/wav"
+    },
+    {
+      "path": "audio/utt_0005.wav",
+      "size": 83330,
+      "sha256": "b406403851bd3be1bd1c6e6708676d6b6470e52e66749a56efa3c04dda9c0ba0",
+      "encoding_format": "audio/wav"
+    },
+    {
+      "path": "audio/utt_0006.wav",
+      "size": 109954,
+      "sha256": "56ce0f17de83a339cccb05fc96a4c44bd4ae05ec307fb8afa8344d05a0d03bc7",
+      "encoding_format": "audio/wav"
+    },
+    {
+      "path": "audio/utt_0007.wav",
+      "size": 105858,
+      "sha256": "44547abd3633a0199ce8a12c09b50cd89491444554e5e041edc23f2f56505715",
+      "encoding_format": "audio/wav"
+    },
+    {
+      "path": "audio/utt_0008.wav",
+      "size": 94936,
+      "sha256": "d9772bf163d7e008437eb5f4bbbf081a383ef51ea8c5139c96ea239c78a96b14",
+      "encoding_format": "audio/wav"
+    },
+    {
+      "path": "croissant.json",
+      "size": 6451,
+      "sha256": "286624c462a0faaa81bbd551240ac13ef495bf3bc4aef0e64a72cea645aec817",
+      "encoding_format": "application/ld+json"
+    },
+    {
+      "path": "manifests/manifest.jsonl",
+      "size": 2459,
+      "sha256": "b68dff47e0a6a83e9c02e341c06817d2450c6ccd8d1b74380ac43dd73ba7ef33",
+      "encoding_format": "application/jsonl"
+    }
+  ]
+}

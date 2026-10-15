@@ -10,6 +10,10 @@ Canonical Backblaze product documentation: https://www.backblaze.com/docs/cloud-
 - [Machine-readable catalog](catalog/architectures.yaml): Audiences, workflows, boundaries, capabilities, evidence, security and resource links.
 - [B2 capability map](docs/b2-capabilities.md): What each B2 capability does, what it requires, its limitations and which architecture uses it.
 
+## Architectures
+
+- [Voice training data lifecycle](architectures/voice-training-data-lifecycle/architecture.md): Collect speech with consent, validate and review it, and publish immutable dataset releases that NeMo, Lhotse, Hugging Face Datasets, WebDataset and MosaicML Streaming read from B2.
+
 ## Contracts and schemas
 
 - [B2 voice and speech AI architecture catalog schema](schemas/architecture-catalog.schema.json): JSON Schema.

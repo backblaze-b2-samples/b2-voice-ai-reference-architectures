@@ -105,9 +105,12 @@ class Repo:
 def repo(tmp_path: Path) -> Repo:
     shutil.copytree(REPO / "schemas", tmp_path / "schemas")
     shutil.copy(REPO / "README.md", tmp_path / "README.md")
-    (tmp_path / "catalog").mkdir()
-    shutil.copy(REPO / "catalog" / "architectures.yaml", tmp_path / "catalog" / "architectures.yaml")
-    return Repo(tmp_path)
+    # Start from the repository's catalog header with no entries, so each test adds only what it checks.
+    catalog = yaml.safe_load((REPO / "catalog" / "architectures.yaml").read_text())
+    catalog["architectures"] = []
+    mini = Repo(tmp_path)
+    mini.save(catalog)
+    return mini
 
 
 @pytest.fixture
