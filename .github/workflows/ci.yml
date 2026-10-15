@@ -1,0 +1,35 @@
+name: ci
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - name: Install Python dependencies
+        run: pip install -r requirements-catalog.txt -r requirements-dev.txt
+      - name: Tests
+        run: python -m pytest -q tests
+      - name: Catalog and contracts
+        run: python tools/validate_contracts.py
+      - name: Capability map
+        run: |
+          if [ -f docs/b2-capabilities.md ]; then
+            python tools/validate_contracts.py --capability-map docs/b2-capabilities.md
+          fi
+      - name: Generated files are current
+        run: python tools/generate_catalog.py --check
+      - name: Markdown links
+        run: python tools/check_markdown_links.py
+      - name: TypeScript examples
+        run: |
+          if [ -f tools/run_ts_examples.sh ]; then
+            bash tools/run_ts_examples.sh
+          fi
+      - name: JSON files are valid
+        run: git ls-files '*.json' | xargs -r -n1 python -m json.tool > /dev/null

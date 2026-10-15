@@ -1,0 +1,22 @@
+# B2 Reference Architectures for Voice and Speech AI
+
+> Designs, schemas and runnable examples for storing, versioning and delivering voice and speech AI data with Backblaze B2: training datasets, generated audio and voice agent sessions.
+
+Canonical Backblaze product documentation: https://www.backblaze.com/docs/cloud-storage-ai-machine-learning. Repository pages are maintained as clean Markdown; product documentation remains authoritative for changing service behavior. This community-convention file is a navigation aid, not an access-control policy or a search-ranking claim.
+
+## Start here
+
+- [Architecture index](docs/architecture-index.md): Human-readable index generated from the catalog.
+- [Machine-readable catalog](catalog/architectures.yaml): Audiences, workflows, boundaries, capabilities, evidence, security and resource links.
+
+## Contracts and schemas
+
+- [B2 voice and speech AI architecture catalog schema](schemas/architecture-catalog.schema.json): JSON Schema.
+- [Voice dataset delivery manifest schema](schemas/delivery-manifest.schema.json): JSON Schema.
+- [Voice dataset release manifest schema](schemas/release-manifest.schema.json): JSON Schema.
+
+## Official product documentation
+
+- [Backblaze AI and machine learning](https://www.backblaze.com/docs/cloud-storage-ai-machine-learning): Canonical B2 documentation hub.
+- [Backblaze B2 documentation](https://www.backblaze.com/docs/cloud-storage): Current product behavior and setup.
+- [Backblaze B2 pricing](https://www.backblaze.com/cloud-storage/pricing): Current pricing and egress terms.
