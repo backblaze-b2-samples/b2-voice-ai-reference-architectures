@@ -139,3 +139,39 @@ b2 key create --bucket "$B2_PROTECTED_BUCKET" --name-prefix consents/ consent-au
 ```
 
 No key used by an application has `deleteFiles`, `bypassGovernance` or `writeKeys` unless its job requires it.
+
+## Code examples
+
+Runnable examples for the S3-compatible API, in Python (`examples/python/`) and TypeScript (`examples/typescript/`). Both read their settings from the environment only:
+
+| Variable | Purpose |
+|---|---|
+| `B2_APPLICATION_KEY_ID`, `B2_APPLICATION_KEY` | Application key; scope it to the bucket and prefix the code needs |
+| `B2_REGION` | Region such as `us-west-004`; the endpoint `https://s3.<region>.backblazeb2.com` is derived from it |
+| `B2_INCOMING_BUCKET`, `B2_WORK_BUCKET`, `B2_RELEASES_BUCKET`, `B2_PROTECTED_BUCKET` | Zone buckets from the layout above |
+| `B2_EVENT_SIGNING_SECRET` | Event Notifications signing secret, used by the webhook receiver |
+
+Every request sends the user agent suffix `b2-voice-ai-reference-architectures`.
+
+| Topic | Python | TypeScript |
+|---|---|---|
+| Client, presigned GET and PUT, object versions | [`b2_client.py`](python/b2_client.py) | [`b2Client.ts`](typescript/src/b2Client.ts) |
+| Multipart upload with retry, resume, complete and abort | [`multipart.py`](python/multipart.py) | [`multipart.ts`](typescript/src/multipart.ts) |
+| Event Notifications signature check, each `eventId` processed once | [`notifications.py`](python/notifications.py) | [`notifications.ts`](typescript/src/notifications.ts) |
+| Egress model with the allowance as a required input | [`egress_model.py`](python/egress_model.py) | |
+
+Notes on behavior:
+
+- **Resume.** An interrupted multipart upload stays in the bucket. Calling the upload function again with the same key lists the stored parts, compares each with the local file by size and MD5, and uploads only the missing or changed ones. Call the abort function to discard an upload, or let the lifecycle rule for unfinished large files cancel it.
+- **Presigned PUT.** The `Content-Type` passed when signing must be sent by the uploader; the browser origin also needs the CORS template above.
+- **Versions.** B2 keeps every version of a key. A plain delete adds a hide marker; deleting a specific version removes it permanently.
+- **Events.** The receiver checks the `X-Bz-Event-Notification-Signature` header (`v1=` followed by the HMAC SHA-256 of the raw body), then claims each `eventId` before running the handler. The Python store uses SQLite and the TypeScript store is in memory; use a shared database when several workers run.
+- **Egress model.** `egress_model.py` takes the volume, the number of reads and the egress allowance as required inputs and prints the billable volume. It contains no price or allowance; read both from the [B2 pricing page](https://www.backblaze.com/cloud-storage/pricing).
+
+Run the tests without a B2 account. Both suites start from a local S3-compatible server (moto), so install the development requirements first:
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest -q tests/test_examples_python.py
+bash tools/run_ts_examples.sh
+```
