@@ -47,6 +47,7 @@ Each architecture folder holds `architecture.md` (data flow, boundaries, where B
 | [`docs/b2-capabilities.md`](docs/b2-capabilities.md) | B2 capability map: what each capability does, what it requires, its limitations and which architecture uses it |
 | [`docs/architecture-index.md`](docs/architecture-index.md) | Index of the architectures, generated from the catalog |
 | [`docs/voice-speech-ai.md`](docs/voice-speech-ai.md) | Category page: what the architectures cover, where B2 fits and does not, standard B2 versus Overdrive, when to use, when not to use, FAQ |
+| [`docs/related-b2-samples.md`](docs/related-b2-samples.md) | Existing public sample applications for audio, speech and transcription on B2, each with the date its B2 integration checks passed |
 | [`applications/`](applications/README.md) | Sample applications that implement the architectures, and how each entry is described |
 | [`examples/`](examples/README.md) | B2 configuration templates (CORS, lifecycle, Event Notifications, Object Lock, replication, encryption), scoped key commands, and Python and TypeScript code examples |
 | [`infrastructure/`](infrastructure/README.md) | LiveKit Egress output to B2, and provisioning of per-zone buckets and scoped keys |

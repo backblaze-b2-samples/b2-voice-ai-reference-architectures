@@ -18,7 +18,7 @@ State the evidence basis when it matters to a recommendation. Documentation revi
 |---|---|
 | `architectures/` | One folder per architecture |
 | `catalog/` | The architecture and integration catalog |
-| `docs/` | Category page (`voice-speech-ai.md`), capability map, generated architecture index, overview diagram (`docs/images/`) |
+| `docs/` | Category page (`voice-speech-ai.md`), capability map, generated architecture index, related sample applications (`related-b2-samples.md`), overview diagram (`docs/images/`) |
 | `examples/` | B2 configuration templates (JSON), scoped key commands, Python (`examples/python/`) and TypeScript (`examples/typescript/`) examples |
 | `infrastructure/` | LiveKit Egress request template and the bucket and key provisioning helper |
 | `schemas/`, `manifests/` | JSON Schemas and valid example manifests |
@@ -48,6 +48,8 @@ python tools/generate_catalog.py --check
 python tools/check_markdown_links.py
 bash tools/run_ts_examples.sh
 ```
+
+`python tools/check_markdown_links.py --external docs/related-b2-samples.md` checks that the external links of that page respond; it needs network access, so CI does not run it. Re-run the four B2 convention checks on a fresh clone of a sample and update its date on that page before adding or keeping a row.
 
 Regenerate after editing the catalog, and re-render after editing the diagram script:
 

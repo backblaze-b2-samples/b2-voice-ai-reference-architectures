@@ -611,3 +611,100 @@ def test_links_in_dependency_folders_and_code_fences_are_skipped(tmp_path: Path)
     (tmp_path / "node_modules" / "pkg" / "x.md").write_text("[a](missing.md)")
     (tmp_path / "README.md").write_text("```md\n[a](missing.md)\n```\n")
     assert check_markdown_links.check(tmp_path) == (0, [])
+
+
+# --- check_markdown_links --external ---------------------------------------------------------
+
+@pytest.fixture
+def local_server():
+    """A local HTTP server: /ok 200, /missing 404, /moved redirects to /ok, /nohead refuses HEAD, /slow stalls."""
+    import http.server
+    import threading
+    import time
+
+    seen: list[tuple[str, str, str | None]] = []
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def _answer(self):
+            seen.append((self.command, self.path, self.headers.get("Authorization")))
+            if self.path == "/ok":
+                self.send_response(200)
+            elif self.path == "/moved":
+                self.send_response(302)
+                self.send_header("Location", "/ok")
+            elif self.path == "/nohead" and self.command == "HEAD":
+                self.send_response(405)
+            elif self.path == "/nohead":
+                self.send_response(200)
+            elif self.path == "/slow":
+                time.sleep(1.5)
+                self.send_response(200)
+            else:
+                self.send_response(404)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        do_HEAD = do_GET = _answer
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_address[1]}", seen
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.fixture(autouse=False)
+def no_proxy(monkeypatch):
+    for name in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("NO_PROXY", "127.0.0.1")
+
+
+def test_external_links_pass_and_follow_redirects(tmp_path: Path, local_server, no_proxy):
+    base, seen = local_server
+    page = tmp_path / "page.md"
+    page.write_text(f"[a]({base}/ok) [b]({base}/moved) [c]({base}/nohead) <{base}/ok> [local](x.md) [anchor](#top)")
+    checked, failures = check_markdown_links.check_external(page, timeout=5)
+    assert (checked, failures) == (3, [])
+    assert ("GET", "/nohead", None) in seen
+    assert all(auth is None for _, _, auth in seen)
+
+
+def test_external_link_errors_are_reported(tmp_path: Path, local_server, no_proxy):
+    base, _ = local_server
+    page = tmp_path / "page.md"
+    page.write_text(f"[a]({base}/ok) [b]({base}/missing)")
+    checked, failures = check_markdown_links.check_external(page, timeout=5)
+    assert checked == 2 and len(failures) == 1 and "/missing" in failures[0] and "404" in failures[0]
+
+
+def test_external_link_timeout_and_refused_connection_fail(tmp_path: Path, local_server, no_proxy):
+    base, _ = local_server
+    page = tmp_path / "page.md"
+    page.write_text(f"[slow]({base}/slow) [refused](http://127.0.0.1:1/x)")
+    checked, failures = check_markdown_links.check_external(page, timeout=0.3)
+    assert checked == 2 and len(failures) == 2
+
+
+def test_external_links_in_code_fences_and_duplicates_are_ignored(tmp_path: Path):
+    page = tmp_path / "page.md"
+    page.write_text("```\n[a](http://127.0.0.1:1/never)\n```\n[b](https://example.com/x) [c](https://example.com/x)\n")
+    assert check_markdown_links.external_links(page) == ["https://example.com/x"]
+
+
+def test_external_cli_exit_codes(tmp_path: Path, local_server, no_proxy, capsys):
+    base, _ = local_server
+    good = tmp_path / "good.md"
+    good.write_text(f"[a]({base}/ok)")
+    bad = tmp_path / "bad.md"
+    bad.write_text(f"[a]({base}/missing)")
+    assert check_markdown_links.cli(["--external", str(good), "--timeout", "5"]) == 0
+    assert check_markdown_links.cli(["--external", str(bad), "--timeout", "5"]) == 1
+    assert check_markdown_links.cli(["--external", str(tmp_path / "absent.md")]) == 1
+    assert "no such file" in capsys.readouterr().out
