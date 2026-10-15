@@ -258,3 +258,124 @@ architectures:
       deployment: infrastructure/b2-provisioning/README.md
       sample_data: testdata/synthetic-speech/README.md
       release_contract: schemas/generation-job-manifest.schema.json
+  - id: voice-agent-session-archive
+    name: Voice agent session archive
+    slug: voice-agent-session-archive
+    summary: Archive finished voice agent sessions from LiveKit Egress or a session adapter, evaluate each session for quality and safety, retain it per class under Object Lock, and select only passed, consented sessions for review, analytics or datasets.
+    audience:
+      - Backend engineers
+      - Voice agent developers
+      - ML engineers
+      - Platform engineers
+    problem: Voice agent platforms produce recordings, tracks, transcripts and events that must be kept for a defined period, traced to consent, and checked before anyone reuses them; most platforms do not write to B2 themselves.
+    workflow:
+      - Record the session with LiveKit Egress to B2, or copy it from the platform with an adapter
+      - Write the session manifest last, when the session has ended
+      - Start evaluation on a signed Event Notification for the manifest
+      - Run quality and safety checks and record the result and eligible uses
+      - Copy sessions to the protected zone with retention per class
+      - Retrieve sessions through short-lived presigned URLs issued by the application
+      - Select passed sessions whose consent covers the use into dataset releases
+    boundaries:
+      - real-time-voice-transport
+      - low-latency-session-store
+      - message-queue
+      - transcription-or-voice-model
+      - workflow-orchestrator
+      - metadata-catalog
+      - vector-database
+      - gpu-cache-or-training-storage
+    capabilities:
+      - S3-compatible API
+      - Presigned URLs and CORS
+      - Multipart upload with resume
+      - Application keys with limited scope
+      - Event Notifications with a signed, idempotent webhook
+      - Versions and lifecycle rules
+      - Server-side encryption
+      - Object Lock
+      - Cloud Replication
+      - Local processing or GPU cache
+    integrations:
+      - id: livekit-egress
+        name: LiveKit Egress
+        role: Recording of voice agent rooms and tracks
+        connection: S3 output with the B2 endpoint, force_path_style and a key limited to sessions/ in the incoming bucket; template in infrastructure/livekit-egress
+        connection_type: native-s3-output
+        url: https://docs.livekit.io/home/egress/outputs/
+        evidence: Egress outputs, Egress API and webhooks documentation, read 2026-10-15
+      - id: pipecat
+        name: Pipecat
+        role: Voice agent pipelines that buffer user and bot audio
+        connection: AudioBufferProcessor hands mixed or per-track PCM to the application, which converts it and uploads it to B2
+        connection_type: application-copy
+        url: https://docs.pipecat.ai/server/utilities/audio/audio-buffer-processor
+        evidence: AudioBufferProcessor documentation, read 2026-10-15
+      - id: twilio
+        name: Twilio Voice
+        role: Call and conference recordings
+        connection: The recording status callback triggers the adapter, which downloads the media with HTTP Basic authentication and writes it to B2; Twilio external storage supports AWS S3 only
+        connection_type: application-copy
+        url: https://www.twilio.com/docs/voice/api/recording
+        evidence: Recording resource, recording settings and webhook security documentation, read 2026-10-15
+      - id: daily
+        name: Daily
+        role: Cloud and raw-tracks recordings of calls
+        connection: The recording.ready-to-download webhook triggers the adapter, which downloads the file through the recording access link API and writes it to B2; Daily custom storage supports Amazon S3 only, with OCI by request
+        connection_type: application-copy
+        url: https://docs.daily.co/reference/rest-api/recordings/get-recording-link
+        evidence: Custom S3 bucket guide, webhook event, access link and webhooks reference, read 2026-10-15
+      - id: vapi
+        name: Vapi
+        role: Hosted voice agent call recordings and logs
+        connection: After the end-of-call-report event, the adapter fetches recordings from the authenticated artifact endpoints, which redirect to short-lived signed URLs, and writes them to B2
+        connection_type: application-copy
+        url: https://docs.vapi.ai/security-and-privacy/retrieve-call-artifacts
+        evidence: Retrieve call artifacts, call recording, data flow and server events documentation, read 2026-10-15
+    prerequisites:
+      - A B2 account with four private buckets, one per zone, with Object Lock on the protected bucket
+      - Event Notifications enabled for the account, or a polling fallback
+      - A queue and job runner outside B2
+      - A voice platform with recording enabled, and a session adapter for platforms other than LiveKit Egress
+      - A consent service, a session evaluator and an application that authorizes retrieval
+    expected_scale:
+      profile: From a few sessions a day to continuous call volume
+      notes: Capture and archive scale with the platform's recording throughput, not with B2. Each retained session is stored twice until the incoming copy expires; the incoming lifecycle bounds that overlap.
+    validation:
+      status: documentation-reviewed
+      date: "2026-10-15"
+      methods:
+        - Platform behavior checked against LiveKit, Pipecat, Twilio, Daily and Vapi documentation on 2026-10-15
+        - B2 behavior checked against the Backblaze documentation linked from the capability map
+        - Session manifest example and synthetic session fixture validated against their schema in CI
+      evidence:
+        - architectures/voice-agent-session-archive/architecture.md
+        - docs/b2-capabilities.md
+        - https://docs.livekit.io/home/egress/outputs/
+        - https://docs.livekit.io/home/egress/api/
+        - https://docs.livekit.io/home/server/webhooks/
+        - https://docs.pipecat.ai/server/utilities/audio/audio-buffer-processor
+        - https://www.twilio.com/docs/voice/api/recording
+        - https://www.twilio.com/docs/voice/recording-settings
+        - https://docs.daily.co/guides/products/live-streaming-recording/storing-recordings-in-a-custom-s3-bucket
+        - https://docs.daily.co/reference/rest-api/recordings/get-recording-link
+        - https://docs.vapi.ai/security-and-privacy/retrieve-call-artifacts
+        - https://docs.vapi.ai/security-and-privacy/data-flow
+    security_considerations:
+      - Only the Egress key reaches a platform, limited to sessions/ in the incoming bucket
+      - Platform API credentials kept in the adapter; platform download links fetched server-side and never stored
+      - Event Notification, LiveKit, Twilio and Daily webhooks verified before acting and each event processed once
+      - Retrieval through short-lived presigned GET URLs issued after the application authorizes the person
+      - SSE-B2 default encryption; object names and metadata carry session ids and pseudonymous participant ids only
+    compliance_considerations:
+      - Quality and safety evaluation before any session can be selected for review, analytics or model improvement
+      - Eligible uses limited to what the consent record permits, and consent re-checked at selection time
+      - Retention per class with Object Lock in governance mode and legal hold where required
+      - Consent withdrawal removes the session from later selections and allows affected releases to be removed
+      - Provenance from dataset file to session, evaluation and consent ids
+    links:
+      architecture: architectures/voice-agent-session-archive/architecture.md
+      application: null
+      deployment: infrastructure/livekit-egress/README.md
+      sample_data: testdata/synthetic-speech/README.md
+      release_contract: schemas/session-manifest.schema.json

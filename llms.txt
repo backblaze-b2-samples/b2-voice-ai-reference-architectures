@@ -14,6 +14,7 @@ Canonical Backblaze product documentation: https://www.backblaze.com/docs/cloud-
 
 - [Voice training data lifecycle](architectures/voice-training-data-lifecycle/architecture.md): Collect speech with consent, validate and review it, and publish immutable dataset releases that NeMo, Lhotse, Hugging Face Datasets, WebDataset and MosaicML Streaming read from B2.
 - [Batch voice generation and dubbing](architectures/batch-voice-generation-and-dubbing/architecture.md): Send sources to dubbing, speech synthesis and transcription providers through presigned GET URLs, keep every output as an expiring candidate, and promote reviewed outputs to immutable deliveries with lineage.
+- [Voice agent session archive](architectures/voice-agent-session-archive/architecture.md): Archive finished voice agent sessions from LiveKit Egress or a session adapter, evaluate each session for quality and safety, retain it per class under Object Lock, and select only passed, consented sessions for review, analytics or datasets.
 
 ## Contracts and schemas
 
