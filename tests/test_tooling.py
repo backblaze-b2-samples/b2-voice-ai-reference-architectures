@@ -132,6 +132,8 @@ class Repo:
 def repo(tmp_path: Path) -> Repo:
     shutil.copytree(REPO / "schemas", tmp_path / "schemas")
     (tmp_path / "README.md").write_text(README_FIXTURE)
+    (tmp_path / ".github" / "workflows").mkdir(parents=True)
+    (tmp_path / ".github" / "workflows" / "ci.yml").write_text(ci_text(None))
     # Start from the repository's catalog header with no entries, so each test adds only what it checks.
     catalog = yaml.safe_load((REPO / "catalog" / "architectures.yaml").read_text())
     catalog["architectures"] = []
@@ -500,29 +502,360 @@ def test_missing_capability_map_file_fails(repo: Repo):
 
 # --- applications ----------------------------------------------------------------------
 
-def test_require_applications_counts_public_links(repo: Repo):
-    repo.add_architecture("voice-training-data-lifecycle")
-    repo.add_architecture("batch-voice-generation-and-dubbing")
+APP = "voice-dataset-ingest"
+OTHER_APP = "voice-session-archive"
+SHARED_SOURCE = "def multipart_upload():\n    return 'unchanged'\n"
+
+PYPROJECT_TEMPLATE = """[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "{name}"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["boto3>=1.34,<2", "jsonschema>=4.23,<5", "python-dotenv>=1.0,<2"]
+
+[project.scripts]
+{name} = "{package}.cli:main"
+
+[tool.setuptools.package-data]
+{package} = ["schemas/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = ["live: runs only against a real B2 account"]
+"""
+
+ENV_EXAMPLE = """B2_APPLICATION_KEY_ID=<key-id>
+B2_APPLICATION_KEY=<application-key>
+B2_BUCKET_NAME=<bucket-name>
+B2_REGION=<region>
+# B2_PUBLIC_URL_BASE=
+"""
+
+GITIGNORE = ".env\n*.egg-info/\n.venv/\n__pycache__/\n.pytest_cache/\n.local-state/\n"
+
+APP_README = """# Application
+
+## B2's role
+
+It writes objects to one bucket.
+
+## Setup
+
+Install it.
+
+## Tests
+
+Run pytest.
+
+## Known limitations
+
+Not run against a live account.
+"""
+
+APPLICATION_SECTION = """## {name}
+
+### What it shows
+
+A workflow.
+
+### Architecture
+
+`{arch}`.
+
+### Configurations it ships
+
+Templates only.
+
+### How to run
+
+Run the command.
+
+### Known limitations
+
+Emulated S3 only.
+"""
+
+
+def ci_text(apps=(APP,), permissions="permissions:\n  contents: read\n", trigger="on: [push, pull_request]") -> str:
+    text = f"name: ci\n{trigger}\n{permissions}jobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo test\n"
+    if apps is not None:
+        text += (
+            "  applications:\n    name: Application ${{ matrix.app }}\n    runs-on: ubuntu-latest\n"
+            f"    strategy:\n      matrix:\n        app: [{', '.join(apps)}]\n    steps:\n      - run: echo app\n"
+        )
+    return text
+
+
+def application_files(repo: Repo, name: str) -> dict[str, str | None]:
+    package = name.replace("-", "_")
+    base = f"applications/{name}"
+    return {
+        f"{base}/pyproject.toml": PYPROJECT_TEMPLATE.format(name=name, package=package),
+        f"{base}/requirements.txt": "boto3>=1.34,<2\njsonschema>=4.23,<5\npython-dotenv>=1.0,<2\n",
+        f"{base}/requirements-dev.txt": "-r requirements.txt\npytest>=8,<9\nmoto[server]>=5,<6\n",
+        f"{base}/.gitignore": GITIGNORE,
+        f"{base}/.env.example": ENV_EXAMPLE,
+        f"{base}/README.md": APP_README,
+        f"{base}/src/{package}/__init__.py": "",
+        f"{base}/src/{package}/cli.py": "def main():\n    return 0\n",
+        f"{base}/src/{package}/config.py": "CONFIG = {}\n",
+        f"{base}/src/{package}/storage.py": "def make_client():\n    return None\n",
+        f"{base}/src/{package}/shared/__init__.py": "",
+        f"{base}/src/{package}/shared/multipart.py": SHARED_SOURCE,
+        f"{base}/src/{package}/schemas/consent-record.schema.json":
+            (repo.root / "schemas" / "consent-record.schema.json").read_text(),
+        f"{base}/tests/conftest.py": "",
+        f"{base}/tests/test_live.py": "",
+    }
+
+
+def add_application(repo: Repo, name: str = APP, arch: str = ENTRY_ID, files: dict | None = None,
+                    matrix: list[str] | None = None, section: bool = True, link: bool = True) -> None:
+    """Write a valid application, its CI matrix entry, its README section and its catalog link."""
+    repo.write("examples/python/multipart.py", SHARED_SOURCE)
+    for path, text in {**application_files(repo, name), **(files or {})}.items():
+        if text is None:
+            continue
+        repo.write(path, text)
+    names = sorted({*(application_matrix(repo)), *( [name] if matrix is None else matrix)})
+    repo.write(".github/workflows/ci.yml", ci_text(names))
+    readme = repo.root / "applications" / "README.md"
+    text = readme.read_text() if readme.exists() else "# Sample applications\n\n"
+    if section:
+        text += APPLICATION_SECTION.format(name=name, arch=arch) + "\n"
+    repo.write("applications/README.md", text)
+    if link:
+        if not any(item["id"] == arch for item in repo.catalog()["architectures"]):
+            repo.add_architecture(arch, session_evaluation=(arch == SESSION_ID))
+        catalog = repo.catalog()
+        for item in catalog["architectures"]:
+            if item["id"] == arch:
+                item["links"]["application"] = f"applications/{name}/README.md"
+        repo.save(catalog)
+        repo.regenerate()
+
+
+def application_matrix(repo: Repo) -> list[str]:
+    workflow = yaml.safe_load((repo.root / ".github" / "workflows" / "ci.yml").read_text())
+    return validate_contracts.ci_matrix(workflow) or []
+
+
+def rewrite(repo: Repo, relative: str, old: str, new: str) -> None:
+    text = (repo.root / relative).read_text()
+    assert old in text, f"{old!r} not in {relative}"
+    repo.write(relative, text.replace(old, new))
+
+
+def application_errors(repo: Repo) -> list[str]:
+    return [error for error in repo.errors() if error.startswith("applications/") or "links.application" in error]
+
+
+@pytest.fixture
+def app_repo(repo: Repo) -> Repo:
+    add_application(repo)
+    return repo
+
+
+def test_valid_application_passes(app_repo: Repo):
+    assert app_repo.errors() == []
+    assert application_errors(app_repo) == []
+
+
+@pytest.mark.parametrize("missing", [
+    "pyproject.toml", "requirements.txt", "requirements-dev.txt", ".gitignore", ".env.example", "README.md",
+    "src/voice_dataset_ingest/cli.py", "src/voice_dataset_ingest/config.py", "src/voice_dataset_ingest/storage.py",
+    "tests/conftest.py", "tests/test_live.py",
+])
+def test_application_shape_is_required(repo: Repo, missing: str):
+    add_application(repo, link=False)
+    assert repo.errors() == []
+    (repo.root / "applications" / APP / missing).unlink()
+    assert has(repo.errors(), f"applications/{APP}: missing {missing}")
+
+
+def test_application_shape_rejects_package_json_and_bad_project_files(repo: Repo):
+    add_application(repo)
+    repo.write(f"applications/{APP}/web/package.json", "{}\n")
+    assert has(repo.errors(), "package.json")
+    (repo.root / "applications" / APP / "web" / "package.json").unlink()
+    assert repo.errors() == []
+    rewrite(repo, f"applications/{APP}/pyproject.toml", 'name = "voice-dataset-ingest"', 'name = "other"')
+    assert has(repo.errors(), "project name must be voice-dataset-ingest")
+    rewrite(repo, f"applications/{APP}/pyproject.toml", 'testpaths = ["tests"]', 'testpaths = ["elsewhere"]')
+    assert has(repo.errors(), "testpaths")
+    repo.write(f"applications/{APP}/.gitignore", ".env\n")
+    assert has(repo.errors(), ".gitignore must list")
+
+
+def test_application_dependencies_are_bounded(repo: Repo):
+    add_application(repo)
+    assert repo.errors() == []
+    for relative in ("requirements.txt", "requirements-dev.txt"):
+        original = (repo.root / "applications" / APP / relative).read_text()
+        repo.write(f"applications/{APP}/{relative}", original + "requests>=2\n")
+        assert has(repo.errors(), f"{relative}: requests>=2 has no upper bound")
+        repo.write(f"applications/{APP}/{relative}", original)
+    assert repo.errors() == []
+    rewrite(repo, f"applications/{APP}/pyproject.toml", '"boto3>=1.34,<2"', '"boto3>=1.34"')
+    assert has(repo.errors(), "dependency boto3>=1.34 has no upper bound")
+
+
+def test_application_shared_copy_must_match_source(repo: Repo):
+    add_application(repo)
+    assert repo.errors() == []
+    shared = f"applications/{APP}/src/voice_dataset_ingest/shared/multipart.py"
+    repo.write(shared, SHARED_SOURCE + "# edited in the copy\n")
+    assert has(repo.errors(), "shared/multipart.py differs from examples/python/multipart.py")
+    repo.write(shared, SHARED_SOURCE)
+    assert repo.errors() == []
+    repo.write(shared.replace("multipart.py", "invented.py"), "x = 1\n")
+    assert has(repo.errors(), "shared/invented.py has no source")
+
+
+def test_application_schema_copy_must_match_source(repo: Repo):
+    add_application(repo)
+    assert repo.errors() == []
+    copy = f"applications/{APP}/src/voice_dataset_ingest/schemas/consent-record.schema.json"
+    original = (repo.root / copy).read_text()
+    repo.write(copy, original.replace('"title"', '"title ": "x", "_title"', 1))
+    assert has(repo.errors(), "schemas/consent-record.schema.json differs")
+    repo.write(copy, original)
+    assert repo.errors() == []
+
+
+def test_application_needs_ci_matrix_entry(repo: Repo):
+    add_application(repo)
+    assert repo.errors() == []
+    repo.write(".github/workflows/ci.yml", ci_text([OTHER_APP]))
+    assert has(repo.errors(), "not listed in the applications job matrix")
+    repo.write(".github/workflows/ci.yml", ci_text(None))
+    assert has(repo.errors(), "not listed in the applications job matrix")
+    repo.write(".github/workflows/ci.yml", ci_text([APP, OTHER_APP]))
+    assert repo.errors() == []
+
+
+def test_application_needs_readme_section(repo: Repo):
+    add_application(repo, section=False)
+    assert has(repo.errors(), f"applications/README.md has no section '## {APP}'")
+    repo.write("applications/README.md", "# Sample applications\n\n" + APPLICATION_SECTION.format(name=APP, arch=ENTRY_ID))
+    assert repo.errors() == []
+    rewrite(repo, "applications/README.md", "### How to run", "### Running")
+    assert has(repo.errors(), "missing 'How to run'")
+    repo.write("applications/README.md", "# Sample applications\n\n" + APPLICATION_SECTION.format(name=APP, arch=ENTRY_ID))
+    rewrite(repo, f"applications/{APP}/README.md", "## Tests", "## Checks")
+    assert has(repo.errors(), "README.md missing section 'Tests'")
+
+
+def test_application_readme_warns_lifecycle_replaces(repo: Repo):
+    add_application(repo)
+    readme = f"applications/{APP}/README.md"
+    command = "\n```bash\nb2 bucket update --lifecycle-rules '[]' \"$B2_BUCKET_NAME\"\n```\n"
+    repo.write(readme, APP_README + command)
+    assert has(repo.errors(), "say that it replaces all of the bucket's rules")
+    repo.write(readme, APP_README + "\nThis command replaces all of the bucket's rules.\n" + command)
+    assert repo.errors() == []
+    repo.write(readme, APP_README + "\naws s3api put-bucket-cors --bucket x\n")
+    assert has(repo.errors(), "say that it replaces")
+
+
+def test_application_link_must_point_to_valid_application(repo: Repo):
+    add_application(repo)
+    assert repo.errors() == []
+    for bad in ("https://github.com/backblaze-b2-samples/some-sample", "applications/README.md",
+                f"applications/{APP}/pyproject.toml", f"applications/{APP}"):
+        catalog = repo.catalog()
+        catalog["architectures"][0]["links"]["application"] = bad
+        repo.save(catalog)
+        repo.regenerate()
+        assert has(repo.errors(), "links.application must be applications/<name>/README.md"), bad
     catalog = repo.catalog()
-    catalog["architectures"][0]["links"]["application"] = "https://github.com/backblaze-b2-samples/one"
-    catalog["architectures"][1]["links"]["application"] = "https://github.com/backblaze-b2-samples/two"
+    catalog["architectures"][0]["links"]["application"] = f"applications/{APP}/README.md"
     repo.save(catalog)
-    assert repo.errors(require_applications=2, public=lambda url: True) == []
-    assert has(repo.errors(require_applications=3, public=lambda url: True), "expected at least 3")
-    assert has(repo.errors(require_applications=2, public=lambda url: url.endswith("one")), "1 public")
-
-
-def test_local_application_paths_do_not_count(repo: Repo):
-    repo.add_architecture()
-    repo.write("applications/demo/README.md", "# Demo\n")
+    repo.regenerate()
+    assert repo.errors() == []
+    (repo.root / "applications" / APP / "tests" / "conftest.py").unlink()
+    assert has(repo.errors(), "which does not pass the application rules")
+    # A link to a folder that does not exist is rejected by the catalog check itself.
     catalog = repo.catalog()
-    catalog["architectures"][0]["links"]["application"] = "applications/demo/README.md"
+    catalog["architectures"][0]["links"]["application"] = "applications/missing/README.md"
     repo.save(catalog)
-    assert has(repo.errors(require_applications=1, public=lambda url: True), "0 public")
+    assert has(repo.errors(), "missing local paths")
 
 
-def test_is_public_repository_rejects_non_github_urls():
-    assert validate_contracts.is_public_repository("https://example.com/a/b") is False
+@pytest.mark.parametrize("pattern", validate_contracts.BUCKET_CONFIGURATION)
+def test_application_source_has_no_bucket_configuration(repo: Repo, pattern: str):
+    add_application(repo)
+    assert repo.errors() == []
+    module = f"applications/{APP}/src/voice_dataset_ingest/storage.py"
+    repo.write(module, f"def configure(client):\n    return '{pattern}'\n")
+    assert has(repo.errors(), f"contains '{pattern}'")
+    repo.write(module, "def make_client():\n    return None\n")
+    assert repo.errors() == []
+
+
+def test_application_source_check_allows_configuration_in_tests_and_docs(repo: Repo):
+    add_application(repo)
+    repo.write(f"applications/{APP}/tests/test_never_configures.py", "FORBIDDEN = 'put_bucket_cors'\n")
+    repo.write(f"applications/{APP}/README.md", APP_README + "\nThe application never calls put_bucket_cors.\n")
+    assert repo.errors() == []
+
+
+@pytest.mark.parametrize("variable", ["B2_ENDPOINT", "B2_S3_ENDPOINT", "B2_KEY_ID"])
+def test_application_rejects_endpoint_variable(repo: Repo, variable: str):
+    add_application(repo)
+    assert repo.errors() == []
+    environment = f"applications/{APP}/.env.example"
+    repo.write(environment, ENV_EXAMPLE + f"{variable}=<value>\n")
+    assert has(repo.errors(), "must not define an endpoint or key id alias")
+    repo.write(environment, ENV_EXAMPLE.replace("B2_REGION=<region>\n", ""))
+    assert has(repo.errors(), "must set B2_REGION")
+    repo.write(environment, ENV_EXAMPLE.replace("# B2_PUBLIC_URL_BASE=", "B2_PUBLIC_URL_BASE="))
+    assert has(repo.errors(), "commented # B2_PUBLIC_URL_BASE=")
+
+
+@pytest.mark.parametrize("text, message", [
+    (ci_text(None, permissions=""), "permissions must be exactly"),
+    (ci_text(None, permissions="permissions: write-all\n"), "permissions must be exactly"),
+    (ci_text(None, permissions="permissions:\n  contents: read\n  pull-requests: write\n"), "permissions must be exactly"),
+    (ci_text(None, trigger="on:\n  pull_request_target:\n    branches: [main]"), "must not use pull_request_target"),
+    (ci_text(None, trigger="on: [push, pull_request_target]"), "must not use pull_request_target"),
+])
+def test_ci_permissions_read_only_and_no_pull_request_target(repo: Repo, text: str, message: str):
+    assert repo.errors() == []
+    repo.write(".github/workflows/ci.yml", text)
+    assert has(repo.errors(), message)
+    repo.write(".github/workflows/ci.yml", ci_text(None))
+    assert repo.errors() == []
+
+
+def test_missing_ci_workflow_fails(repo: Repo):
+    (repo.root / ".github" / "workflows" / "ci.yml").unlink()
+    assert has(repo.errors(), "ci.yml is missing")
+
+
+def test_require_applications_counts_valid_local_applications(repo: Repo):
+    assert has(repo.errors(require_applications=1), "0 catalog entries link a valid application, expected at least 1")
+    assert repo.errors(require_applications=0) == []
+    add_application(repo, APP, ENTRY_ID)
+    add_application(repo, OTHER_APP, SESSION_ID)
+    assert repo.errors(require_applications=2) == []
+    assert has(repo.errors(require_applications=3), "2 catalog entries link a valid application, expected at least 3")
+    # A link to a folder that fails the rules does not count.
+    (repo.root / "applications" / OTHER_APP / "tests" / "test_live.py").unlink()
+    errors = repo.errors(require_applications=2)
+    assert has(errors, "1 catalog entries link a valid application, expected at least 2")
+    assert has(errors, "does not pass the application rules")
+    # An application with no catalog link does not count either.
+    catalog = repo.catalog()
+    for item in catalog["architectures"]:
+        item["links"]["application"] = None
+    repo.save(catalog)
+    repo.regenerate()
+    assert has(repo.errors(require_applications=1), "0 catalog entries link a valid application")
 
 
 # --- generate_catalog ---------------------------------------------------------------------
@@ -575,6 +908,14 @@ def test_llms_lists_optional_pages_only_when_they_exist(valid: Repo):
     valid.write("docs/voice-speech-ai.md", "# Voice and speech AI\n")
     valid.regenerate()
     assert "docs/voice-speech-ai.md" in (valid.root / "llms.txt").read_text()
+    assert check_markdown_links.check(valid.root)[1] == []
+
+
+def test_llms_lists_the_applications_page_only_when_it_exists(valid: Repo):
+    assert "applications/README.md" not in (valid.root / "llms.txt").read_text()
+    valid.write("applications/README.md", "# Sample applications\n")
+    valid.regenerate()
+    assert "[Sample applications](applications/README.md)" in (valid.root / "llms.txt").read_text()
     assert check_markdown_links.check(valid.root)[1] == []
 
 

@@ -300,9 +300,10 @@ def test_llms_txt_omits_them_when_the_files_are_absent(tmp_path: Path):
     assert "(skill/SKILL.md)" in rendered
 
 
-def test_applications_page_is_a_neutral_stub():
+def test_applications_page_describes_the_applications_and_their_rules():
     text = (REPO / "applications" / "README.md").read_text()
-    assert "No sample applications are linked yet" in text
-    for part in ("What it shows", "Architecture", "Configurations it ships", "How to deploy", "Known limitations"):
+    for part in ("What it shows", "Architecture", "Configurations it ships", "How to run", "Known limitations"):
         assert part in text
+    assert "../AGENTS.md#applications" in text
+    assert "emulated S3" in text
     assert EM_DASH not in text

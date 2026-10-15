@@ -186,6 +186,8 @@ The tests, validators and generators create nothing in B2. Only the commands you
 | [Configuration templates](examples/README.md) | The four buckets named by `B2_INCOMING_BUCKET`, `B2_WORK_BUCKET`, `B2_RELEASES_BUCKET` and `B2_PROTECTED_BUCKET`, if you create them from there | `contributions-uploader`, `contributions-reader`, `candidates-writer`, `training-reader`, `consent-auditor` | Lifecycle rules from `lifecycle-*.json`; notification rules `validate-contributions`, `evaluate-sessions` and `review-generation-sources`; S3 CORS rules; Object Lock default retention; replication rule `releases-second-region` with its destination bucket and replication keys |
 | [LiveKit Egress template](infrastructure/livekit-egress/README.md) | None | None; it uses the `voice-sessions-incoming-sessions` key | Recordings under `sessions/` in the incoming bucket |
 
+Each application lists the objects it writes in its README; applications create no bucket, key or rule.
+
 To remove everything the provisioning helper created, print the clean up commands, review them, and run them yourself. The script never runs them:
 
 ```bash
