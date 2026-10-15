@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use these reference architectures, please cite this repository."
+type: software
+title: "B2 Reference Architectures for Voice and Speech AI"
+abstract: "Reference architectures, B2 configuration templates, machine-readable contracts and runnable examples for speech datasets, generated audio and voice agent session archives on Backblaze B2."
+authors:
+  - name: "Backblaze, Inc."
+    website: "https://www.backblaze.com/"
+version: 0.1.0
+date-released: 2026-10-15
+license: MIT
+repository-code: "https://github.com/backblaze-b2-samples/b2-voice-ai-reference-architectures"
+url: "https://www.backblaze.com/docs/cloud-storage-ai-machine-learning"
+keywords:
+  - backblaze-b2
+  - voice-ai
+  - speech-ai
+  - speech-datasets
+  - text-to-speech
+  - voice-agents
+  - livekit
+  - s3-compatible
+  - reference-architecture

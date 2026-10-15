@@ -1,0 +1,32 @@
+{
+  "@context": "https://doi.org/10.5063/schema/codemeta-2.0",
+  "@type": "SoftwareSourceCode",
+  "name": "B2 Reference Architectures for Voice and Speech AI",
+  "description": "Reference architectures, B2 configuration templates, machine-readable contracts and runnable examples for speech datasets, generated audio and voice agent session archives on Backblaze B2.",
+  "version": "0.1.0",
+  "dateModified": "2026-10-15",
+  "codeRepository": "https://github.com/backblaze-b2-samples/b2-voice-ai-reference-architectures",
+  "url": "https://www.backblaze.com/docs/cloud-storage-ai-machine-learning",
+  "license": "https://spdx.org/licenses/MIT",
+  "programmingLanguage": ["Python", "TypeScript"],
+  "keywords": [
+    "backblaze-b2",
+    "voice-ai",
+    "speech-ai",
+    "speech-datasets",
+    "text-to-speech",
+    "voice-agents",
+    "livekit",
+    "s3-compatible",
+    "reference-architecture"
+  ],
+  "author": {
+    "@type": "Organization",
+    "name": "Backblaze, Inc.",
+    "url": "https://www.backblaze.com/"
+  },
+  "copyrightHolder": {
+    "@type": "Organization",
+    "name": "Backblaze, Inc."
+  }
+}

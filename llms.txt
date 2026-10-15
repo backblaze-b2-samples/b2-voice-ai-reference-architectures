@@ -36,3 +36,7 @@ Canonical Backblaze product documentation: https://www.backblaze.com/docs/cloud-
 - [Backblaze AI and machine learning](https://www.backblaze.com/docs/cloud-storage-ai-machine-learning): Canonical B2 documentation hub.
 - [Backblaze B2 documentation](https://www.backblaze.com/docs/cloud-storage): Current product behavior and setup.
 - [Backblaze B2 pricing](https://www.backblaze.com/cloud-storage/pricing): Current pricing and egress terms.
+
+## Optional
+
+- [Repository agent guide](AGENTS.md): Source hierarchy, generation commands and operational invariants.

@@ -19,6 +19,33 @@ SESSION_ID = "voice-agent-session-archive"
 
 ALL_SECTIONS = ["Boundaries", "Where B2 does not fit", "Evidence", "Security"]
 
+# A minimal README with the required sections and generated-section markers. The tests use
+# it instead of the repository's README, whose links point to files a temporary repo lacks.
+README_FIXTURE = """# Fixture repository
+
+## Architectures
+
+<!-- catalog:architectures:start -->
+<!-- catalog:architectures:end -->
+
+## Where state lives
+
+The catalog is the source of the generated tables.
+
+## Clean up
+
+Nothing is created.
+
+## Known limitations
+
+Isolation between tenants is not covered: the layouts assume a single organization.
+
+## Partner integration options
+
+<!-- catalog:integrations:start -->
+<!-- catalog:integrations:end -->
+"""
+
 
 def architecture_md(sections=tuple(ALL_SECTIONS), mermaid=True, covered=("Real-time voice transport", "Message queue"),
                     dated=True, session_evaluation=False):
@@ -104,7 +131,7 @@ class Repo:
 @pytest.fixture
 def repo(tmp_path: Path) -> Repo:
     shutil.copytree(REPO / "schemas", tmp_path / "schemas")
-    shutil.copy(REPO / "README.md", tmp_path / "README.md")
+    (tmp_path / "README.md").write_text(README_FIXTURE)
     # Start from the repository's catalog header with no entries, so each test adds only what it checks.
     catalog = yaml.safe_load((REPO / "catalog" / "architectures.yaml").read_text())
     catalog["architectures"] = []
