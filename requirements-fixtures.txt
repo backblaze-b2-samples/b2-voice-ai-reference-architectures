@@ -1,0 +1,5 @@
+# Only needed to regenerate testdata/synthetic-speech with tools/make_fixtures.py.
+# The generated files are committed, so CI and the tests never install this file.
+# The Kokoro-82M model files are downloaded separately; see testdata/synthetic-speech/README.md.
+kokoro-onnx==0.6.1
+numpy>=2.0

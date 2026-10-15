@@ -5,6 +5,10 @@ With no arguments the whole repository is validated:
 
 * every JSON Schema is valid and carries this repository's `$id` prefix;
 * every `manifests/<name>.example.json` validates against `schemas/<name>.schema.json`;
+* the synthetic fixtures under `testdata/synthetic-speech/` are checked: every manifest
+  line, consent record and session manifest against its schema, every clip against the
+  audio rules, the declared duration against the WAV header, sizes and hashes against
+  the files, and every consent reference against an active consent record;
 * the catalog validates against its schema and every entry is checked: the three
   architecture files, the required sections, a Mermaid diagram, boundary coverage,
   dated evidence, a validation status that claims no more than its evidence, and the
@@ -20,15 +24,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import hashlib
 import re
 import sys
 import urllib.error
 import urllib.request
+from datetime import datetime
 from pathlib import Path
 
 import jsonschema
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import audio_checks  # noqa: E402
 import generate_catalog  # noqa: E402
 
 
@@ -36,6 +43,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_ID_PREFIX = "urn:backblaze:b2-voice-ai-reference-architectures:"
 ARCHITECTURE_FILES = ("architecture.md", "decisions.md", "object-layout.md")
 SESSION_ARCHIVE_ID = "voice-agent-session-archive"
+FIXTURE_DIR = Path("testdata") / "synthetic-speech"
+SESSION_DURATION_SLACK_SECONDS = 1.0
 EM_DASH = chr(0x2014)
 TEXT_SUFFIXES = {".md", ".py", ".yml", ".yaml", ".json", ".jsonl", ".txt", ".cff", ".sh", ".ts", ".toml", ".cfg", ".ini"}
 SKIP_DIRS = {".git", ".venv", "node_modules", ".pytest_cache", "__pycache__"}
@@ -233,6 +242,8 @@ def check_manifest_examples(root: Path) -> list[str]:
         except (ValueError, jsonschema.ValidationError) as error:
             errors.append(f"manifests/{path.name}: {str(error).splitlines()[0]}")
             continue
+        if name == "session-manifest":
+            errors.extend(check_session_semantics(instance, f"manifests/{path.name}"))
         if name == "release-manifest":
             if instance["fingerprint"] != instance["integrity"]["content_fingerprint"]:
                 errors.append(f"manifests/{path.name}: fingerprint differs from integrity.content_fingerprint")
@@ -240,6 +251,163 @@ def check_manifest_examples(root: Path) -> list[str]:
                 errors.append(f"manifests/{path.name}: statistics.file_count does not match files")
             if instance["statistics"]["total_bytes"] != sum(item["size"] for item in instance["files"]):
                 errors.append(f"manifests/{path.name}: statistics.total_bytes does not match files")
+    return errors
+
+
+def schema_validator(root: Path, name: str) -> jsonschema.Draft202012Validator:
+    schema = json.loads((root / "schemas" / f"{name}.schema.json").read_text())
+    return jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker())
+
+
+def first_error(validator: jsonschema.Draft202012Validator, instance: object) -> str | None:
+    errors = sorted(validator.iter_errors(instance), key=lambda error: list(error.path))
+    if not errors:
+        return None
+    where = "/".join(map(str, errors[0].path)) or "<root>"
+    return f"{where}: {errors[0].message}"
+
+
+def parse_datetime(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def check_session_semantics(manifest: dict, label: str) -> list[str]:
+    """Rules a JSON Schema cannot express for a session manifest."""
+    errors = []
+    elapsed = (parse_datetime(manifest["ended_at"]) - parse_datetime(manifest["started_at"])).total_seconds()
+    if elapsed < 0:
+        errors.append(f"{label}: ended_at is before started_at")
+    elif abs(elapsed - manifest["duration_seconds"]) > SESSION_DURATION_SLACK_SECONDS:
+        errors.append(f"{label}: duration_seconds differs from ended_at minus started_at")
+    participants = {item["participant_id"] for item in manifest["participants"]}
+    for recording in manifest["recordings"]:
+        owner = recording.get("participant_id")
+        if owner is not None and owner not in participants:
+            errors.append(f"{label}: recording {recording['path']} names unknown participant {owner}")
+    return errors
+
+
+def check_clip(base: Path, line: dict, label: str) -> list[str]:
+    """Check one manifest line against its audio file: the rules, the duration and the hash."""
+    path = base / line["audio_filepath"]
+    if not path.is_file():
+        return [f"{label}: {line['audio_filepath']} does not exist"]
+    errors = [f"{label}: {line['audio_filepath']} {defect}" for defect in audio_checks.clip_defects(path, line["duration"])]
+    if "sha256" in line and hashlib.sha256(path.read_bytes()).hexdigest() != line["sha256"]:
+        errors.append(f"{label}: {line['audio_filepath']} sha256 does not match the file")
+    return errors
+
+
+def load_consents(base: Path, validator: jsonschema.Draft202012Validator) -> tuple[dict[str, dict], list[str]]:
+    consents: dict[str, dict] = {}
+    errors = []
+    for path in sorted((base / "consents").glob("*.json")):
+        label = f"{FIXTURE_DIR.as_posix()}/consents/{path.name}"
+        try:
+            record = json.loads(path.read_text())
+        except ValueError as error:
+            errors.append(f"{label}: {error}")
+            continue
+        problem = first_error(validator, record)
+        if problem:
+            errors.append(f"{label}: {problem}")
+            continue
+        if record["consent_id"] != path.stem:
+            errors.append(f"{label}: consent_id must equal the file name")
+        consents[record["consent_id"]] = record
+    return consents, errors
+
+
+def check_consent_reference(consents: dict[str, dict], consent_id: str, label: str, use: str | None = None,
+                            speaker: str | None = None) -> list[str]:
+    record = consents.get(consent_id)
+    if record is None:
+        return [f"{label}: consent_id {consent_id} has no record"]
+    errors = []
+    if record["status"] != "active":
+        errors.append(f"{label}: consent {consent_id} is {record['status']}")
+    if use is not None and use not in record["permitted_uses"]:
+        errors.append(f"{label}: consent {consent_id} does not permit {use}")
+    if speaker is not None and record["subject"]["speaker_id"] != speaker:
+        errors.append(f"{label}: consent {consent_id} belongs to {record['subject']['speaker_id']}, not {speaker}")
+    return errors
+
+
+def check_fixtures(root: Path) -> list[str]:
+    """Validate testdata/synthetic-speech: schemas, audio rules, durations, hashes and consent."""
+    base = root / FIXTURE_DIR
+    if not base.is_dir():
+        return []
+    prefix = FIXTURE_DIR.as_posix()
+    errors: list[str] = []
+    line_validator = schema_validator(root, "dataset-line")
+    consents, consent_errors = load_consents(base, schema_validator(root, "consent-record"))
+    errors.extend(consent_errors)
+
+    manifest = base / "manifest.jsonl"
+    if not manifest.is_file():
+        errors.append(f"{prefix}/manifest.jsonl is missing")
+    else:
+        for number, text in enumerate(manifest.read_text().splitlines(), 1):
+            label = f"{prefix}/manifest.jsonl:{number}"
+            try:
+                line = json.loads(text)
+            except ValueError as error:
+                errors.append(f"{label}: {error}")
+                continue
+            problem = first_error(line_validator, line)
+            if problem:
+                errors.append(f"{label}: {problem}")
+                continue
+            errors.extend(check_clip(base, line, label))
+            if "consent_id" in line:
+                use = "training" if line.get("split", "train") == "train" else "evaluation"
+                errors.extend(check_consent_reference(consents, line["consent_id"], label, use, line.get("speaker")))
+
+    session_path = base / "session" / "session-manifest.json"
+    if session_path.is_file():
+        label = f"{prefix}/session/session-manifest.json"
+        try:
+            session = json.loads(session_path.read_text())
+        except ValueError as error:
+            return errors + [f"{label}: {error}"]
+        problem = first_error(schema_validator(root, "session-manifest"), session)
+        if problem:
+            errors.append(f"{label}: {problem}")
+        else:
+            errors.extend(check_session_semantics(session, label))
+            for recording in session["recordings"]:
+                path = session_path.parent / recording["path"]
+                name = f"{label}: {recording['path']}"
+                if not path.is_file():
+                    errors.append(f"{name} does not exist")
+                    continue
+                if path.stat().st_size != recording["size"]:
+                    errors.append(f"{name} size does not match the file")
+                if hashlib.sha256(path.read_bytes()).hexdigest() != recording["sha256"]:
+                    errors.append(f"{name} sha256 does not match the file")
+                if path.suffix == ".wav":
+                    errors.extend(f"{name} {defect}" for defect in audio_checks.clip_defects(path, recording.get("duration_seconds")))
+                    info = audio_checks.read_wav_info(path)
+                    if recording.get("sample_rate_hz") not in (None, info.sample_rate):
+                        errors.append(f"{name} sample_rate_hz does not match the WAV header")
+                    if recording.get("channels") not in (None, info.channels):
+                        errors.append(f"{name} channels does not match the WAV header")
+            for consent_id in session["consent_ids"]:
+                errors.extend(check_consent_reference(consents, consent_id, label))
+
+    croissant = base / "croissant.json"
+    if croissant.is_file():
+        try:
+            document = json.loads(croissant.read_text())
+        except ValueError as error:
+            return errors + [f"{prefix}/croissant.json: {error}"]
+        for item in document.get("distribution", []):
+            target = base / item.get("contentUrl", "")
+            if not target.is_file():
+                errors.append(f"{prefix}/croissant.json: {item.get('contentUrl')} does not exist")
+            elif hashlib.sha256(target.read_bytes()).hexdigest() != item.get("sha256"):
+                errors.append(f"{prefix}/croissant.json: sha256 of {item.get('contentUrl')} does not match the file")
     return errors
 
 
@@ -334,7 +502,7 @@ def check_applications(catalog: dict, minimum: int, public=is_public_repository)
 
 def validate_repository(root: Path = ROOT, capability_map: Path | None = None, require_applications: int | None = None,
                         public=is_public_repository) -> list[str]:
-    errors = check_schemas(root) + check_manifest_examples(root)
+    errors = check_schemas(root) + check_manifest_examples(root) + check_fixtures(root)
     try:
         catalog = generate_catalog.load_catalog(root)
     except (OSError, ValueError, jsonschema.SchemaError) as error:

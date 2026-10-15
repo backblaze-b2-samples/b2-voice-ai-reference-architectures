@@ -1,0 +1,209 @@
+{
+  "@context": {
+    "@language": "en",
+    "@vocab": "https://schema.org/",
+    "citeAs": "cr:citeAs",
+    "column": "cr:column",
+    "conformsTo": "dct:conformsTo",
+    "cr": "http://mlcommons.org/croissant/",
+    "data": {
+      "@id": "cr:data",
+      "@type": "@json"
+    },
+    "dataType": {
+      "@id": "cr:dataType",
+      "@type": "@vocab"
+    },
+    "dct": "http://purl.org/dc/terms/",
+    "extract": "cr:extract",
+    "field": "cr:field",
+    "fileProperty": "cr:fileProperty",
+    "fileObject": "cr:fileObject",
+    "fileSet": "cr:fileSet",
+    "format": "cr:format",
+    "includes": "cr:includes",
+    "jsonPath": "cr:jsonPath",
+    "key": "cr:key",
+    "md5": "cr:md5",
+    "recordSet": "cr:recordSet",
+    "references": "cr:references",
+    "regex": "cr:regex",
+    "repeated": "cr:repeated",
+    "samplingRate": "cr:samplingRate",
+    "sc": "https://schema.org/",
+    "separator": "cr:separator",
+    "source": "cr:source",
+    "subField": "cr:subField",
+    "transform": "cr:transform"
+  },
+  "@type": "sc:Dataset",
+  "conformsTo": "http://mlcommons.org/croissant/1.0",
+  "name": "synthetic-speech-fixtures",
+  "description": "Small synthetic English speech dataset for testing voice data pipelines. Every clip is generated speech; no recording of a person is included. It contains two pseudonymous speakers, a NeMo-style manifest, one two-speaker session and deliberately invalid clips for validator tests.",
+  "license": "https://opensource.org/license/mit",
+  "version": "1.0.0",
+  "inLanguage": "en",
+  "creator": {
+    "@type": "sc:Organization",
+    "name": "Backblaze, Inc."
+  },
+  "distribution": [
+    {
+      "@type": "cr:FileObject",
+      "@id": "manifest.jsonl",
+      "name": "manifest.jsonl",
+      "contentUrl": "manifest.jsonl",
+      "encodingFormat": "application/jsonlines",
+      "sha256": "b68dff47e0a6a83e9c02e341c06817d2450c6ccd8d1b74380ac43dd73ba7ef33"
+    },
+    {
+      "@type": "cr:FileObject",
+      "@id": "audio/utt_0001.wav",
+      "name": "audio/utt_0001.wav",
+      "contentUrl": "audio/utt_0001.wav",
+      "encodingFormat": "audio/wav",
+      "sha256": "7202ed5672f0e0a6111e669150c1368ca4542d1df1071356c8479566de6630f0"
+    },
+    {
+      "@type": "cr:FileObject",
+      "@id": "audio/utt_0002.wav",
+      "name": "audio/utt_0002.wav",
+      "contentUrl": "audio/utt_0002.wav",
+      "encodingFormat": "audio/wav",
+      "sha256": "c9f7d293787c9db9107543af334cfd7d73c6719dfb63a17d9f63c016b25e1b5d"
+    },
+    {
+      "@type": "cr:FileObject",
+      "@id": "audio/utt_0003.wav",
+      "name": "audio/utt_0003.wav",
+      "contentUrl": "audio/utt_0003.wav",
+      "encodingFormat": "audio/wav",
+      "sha256": "7612ff6fa8ff2c38239d4afb0ec32e7b2846f8c90bd24c99291ff5b72cfee5b7"
+    },
+    {
+      "@type": "cr:FileObject",
+      "@id": "audio/utt_0004.wav",
+      "name": "audio/utt_0004.wav",
+      "contentUrl": "audio/utt_0004.wav",
+      "encodingFormat": "audio/wav",
+      "sha256": "06c129ddba52f45b5a78210b77e624f2efd447c36f3f87c8a507b782652bbe99"
+    },
+    {
+      "@type": "cr:FileObject",
+      "@id": "audio/utt_0005.wav",
+      "name": "audio/utt_0005.wav",
+      "contentUrl": "audio/utt_0005.wav",
+      "encodingFormat": "audio/wav",
+      "sha256": "b406403851bd3be1bd1c6e6708676d6b6470e52e66749a56efa3c04dda9c0ba0"
+    },
+    {
+      "@type": "cr:FileObject",
+      "@id": "audio/utt_0006.wav",
+      "name": "audio/utt_0006.wav",
+      "contentUrl": "audio/utt_0006.wav",
+      "encodingFormat": "audio/wav",
+      "sha256": "56ce0f17de83a339cccb05fc96a4c44bd4ae05ec307fb8afa8344d05a0d03bc7"
+    },
+    {
+      "@type": "cr:FileObject",
+      "@id": "audio/utt_0007.wav",
+      "name": "audio/utt_0007.wav",
+      "contentUrl": "audio/utt_0007.wav",
+      "encodingFormat": "audio/wav",
+      "sha256": "44547abd3633a0199ce8a12c09b50cd89491444554e5e041edc23f2f56505715"
+    },
+    {
+      "@type": "cr:FileObject",
+      "@id": "audio/utt_0008.wav",
+      "name": "audio/utt_0008.wav",
+      "contentUrl": "audio/utt_0008.wav",
+      "encodingFormat": "audio/wav",
+      "sha256": "d9772bf163d7e008437eb5f4bbbf081a383ef51ea8c5139c96ea239c78a96b14"
+    }
+  ],
+  "recordSet": [
+    {
+      "@type": "cr:RecordSet",
+      "@id": "utterances",
+      "name": "utterances",
+      "description": "One record per clip in manifest.jsonl (8 clips).",
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "utterances/audio_filepath",
+          "name": "utterances/audio_filepath",
+          "description": "Path of the clip relative to the dataset root.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "manifest.jsonl"
+            },
+            "extract": {
+              "jsonPath": "$.audio_filepath"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "utterances/duration",
+          "name": "utterances/duration",
+          "description": "Duration in seconds, equal to the WAV header duration.",
+          "dataType": "sc:Float",
+          "source": {
+            "fileObject": {
+              "@id": "manifest.jsonl"
+            },
+            "extract": {
+              "jsonPath": "$.duration"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "utterances/text",
+          "name": "utterances/text",
+          "description": "Transcript of the clip.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "manifest.jsonl"
+            },
+            "extract": {
+              "jsonPath": "$.text"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "utterances/speaker",
+          "name": "utterances/speaker",
+          "description": "Pseudonymous speaker id.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "manifest.jsonl"
+            },
+            "extract": {
+              "jsonPath": "$.speaker"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "utterances/split",
+          "name": "utterances/split",
+          "description": "train, dev or test.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "manifest.jsonl"
+            },
+            "extract": {
+              "jsonPath": "$.split"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

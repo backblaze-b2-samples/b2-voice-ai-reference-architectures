@@ -1,0 +1,106 @@
+{
+  "schema_version": "1.0.0",
+  "session_id": "synthetic-session-0001",
+  "started_at": "2026-01-01T00:00:00Z",
+  "ended_at": "2026-01-01T00:00:12Z",
+  "duration_seconds": 12.387,
+  "source": {
+    "platform": "other",
+    "capture": "application-copy"
+  },
+  "participants": [
+    {
+      "participant_id": "spk_a",
+      "role": "agent"
+    },
+    {
+      "participant_id": "spk_b",
+      "role": "caller"
+    }
+  ],
+  "recordings": [
+    {
+      "kind": "mixed",
+      "path": "session_mix.wav",
+      "size": 396420,
+      "sha256": "7a2575ab79f78fc5924561ac391c82fb5d9da906e4e088ebf6ee055c10b06a89",
+      "encoding_format": "audio/wav",
+      "sample_rate_hz": 16000,
+      "channels": 1,
+      "duration_seconds": 12.387
+    },
+    {
+      "kind": "participant-track",
+      "path": "spk_a.wav",
+      "size": 396420,
+      "sha256": "9d435da58f497f9bf8dfbc3a5e5c61bd9069501fbeb3e4ec6a0557eb75ac2381",
+      "encoding_format": "audio/wav",
+      "sample_rate_hz": 16000,
+      "channels": 1,
+      "duration_seconds": 12.387,
+      "participant_id": "spk_a"
+    },
+    {
+      "kind": "participant-track",
+      "path": "spk_b.wav",
+      "size": 396420,
+      "sha256": "be52cc449f4f73f7a3c811d990f440fb25e1a8c6f45cb68f647145df6585a0da",
+      "encoding_format": "audio/wav",
+      "sample_rate_hz": 16000,
+      "channels": 1,
+      "duration_seconds": 12.387,
+      "participant_id": "spk_b"
+    }
+  ],
+  "consent_ids": [
+    "consent_spk_a",
+    "consent_spk_b"
+  ],
+  "retention": {
+    "class": "short",
+    "delete_after": "2026-01-31T00:00:00Z"
+  },
+  "evaluation": {
+    "status": "passed",
+    "evaluated_at": "2026-01-01T00:00:12Z",
+    "evaluator": {
+      "name": "fixture-checks",
+      "version": "1"
+    },
+    "quality": {
+      "status": "pass",
+      "checks": [
+        {
+          "name": "audio-format",
+          "result": "pass"
+        },
+        {
+          "name": "not-silent",
+          "result": "pass"
+        },
+        {
+          "name": "not-clipped",
+          "result": "pass"
+        }
+      ]
+    },
+    "safety": {
+      "status": "pass",
+      "checks": [
+        {
+          "name": "consent-active",
+          "result": "pass"
+        },
+        {
+          "name": "synthetic-speakers-only",
+          "result": "pass"
+        }
+      ]
+    },
+    "eligible_for": [
+      "human-review",
+      "analytics",
+      "model-improvement"
+    ]
+  }
+}

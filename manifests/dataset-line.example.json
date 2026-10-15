@@ -1,0 +1,11 @@
+{
+  "audio_filepath": "audio/utt_0001.wav",
+  "duration": 2.773,
+  "text": "The delivery window opens at nine in the morning.",
+  "speaker": "spk_a",
+  "lang": "en",
+  "sample_rate": 16000,
+  "split": "train",
+  "consent_id": "consent_spk_a",
+  "sha256": "b81eabceac420f6a64921a3ab97a8dbcb70ff1ccaf5eda44503dda649e7aa6a3"
+}

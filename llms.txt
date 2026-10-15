@@ -12,8 +12,12 @@ Canonical Backblaze product documentation: https://www.backblaze.com/docs/cloud-
 ## Contracts and schemas
 
 - [B2 voice and speech AI architecture catalog schema](schemas/architecture-catalog.schema.json): JSON Schema.
+- [Voice consent and license record schema](schemas/consent-record.schema.json): JSON Schema.
+- [Voice dataset manifest line schema](schemas/dataset-line.schema.json): JSON Schema.
 - [Voice dataset delivery manifest schema](schemas/delivery-manifest.schema.json): JSON Schema.
+- [Voice generation job manifest schema](schemas/generation-job-manifest.schema.json): JSON Schema.
 - [Voice dataset release manifest schema](schemas/release-manifest.schema.json): JSON Schema.
+- [Voice agent session manifest schema](schemas/session-manifest.schema.json): JSON Schema.
 
 ## Official product documentation
 

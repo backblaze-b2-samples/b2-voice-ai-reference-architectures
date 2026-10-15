@@ -1,0 +1,26 @@
+{
+  "audio-invalid/bad_sample_rate_8k.wav": [
+    "sample_rate"
+  ],
+  "audio-invalid/bad_stereo.wav": [
+    "channels"
+  ],
+  "audio-invalid/bad_silent.wav": [
+    "silent"
+  ],
+  "audio-invalid/bad_clipped.wav": [
+    "clipped"
+  ],
+  "audio-invalid/bad_too_short.wav": [
+    "too_short"
+  ],
+  "audio-invalid/bad_truncated.wav": [
+    "truncated"
+  ],
+  "audio-invalid/bad_duration_mismatch.wav": [
+    "duration_mismatch"
+  ],
+  "audio/utt_0001.wav": [
+    "schema"
+  ]
+}

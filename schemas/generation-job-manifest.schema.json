@@ -1,0 +1,331 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:backblaze:b2-voice-ai-reference-architectures:generation-job-manifest:1",
+  "title": "Voice generation job manifest",
+  "description": "Describes one batch job that reads source audio or text through a short-lived presigned URL and writes candidate outputs back through the application. An output is promoted to an immutable release version only after review approves it, and the promotion records its lineage.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "job_id",
+    "kind",
+    "created_at",
+    "status",
+    "provider",
+    "input",
+    "outputs",
+    "review"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "kind": {
+      "enum": [
+        "dubbing",
+        "text-to-speech",
+        "transcription",
+        "call-analytics"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "enum": [
+        "queued",
+        "running",
+        "succeeded",
+        "failed",
+        "expired"
+      ]
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "mode"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "enum": [
+            "hosted-api",
+            "self-hosted",
+            "placeholder"
+          ],
+          "description": "placeholder means a local worker that produces synthetic output with no model."
+        },
+        "job_reference": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier the provider returned for the job."
+        },
+        "download_window_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How long the provider allows for downloading the input. The presigned URL must outlive it."
+        }
+      }
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "sha256",
+        "delivery"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^(?!.*\\.\\.)(?!/)[A-Za-z0-9_./=-]+$"
+        },
+        "version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "delivery": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "expires_in_seconds"
+          ],
+          "properties": {
+            "method": {
+              "const": "presigned-get"
+            },
+            "expires_in_seconds": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 604800
+            }
+          }
+        }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_language": {
+          "type": "string",
+          "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]+)*$"
+        },
+        "target_languages": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]+)*$"
+          }
+        },
+        "speakers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]*$"
+          }
+        }
+      }
+    },
+    "consent_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9._-]*$"
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "key",
+          "size",
+          "sha256",
+          "expires_at"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "candidate",
+              "stem",
+              "transcript"
+            ]
+          },
+          "key": {
+            "type": "string",
+            "pattern": "^(?!.*\\.\\.)(?!/)[A-Za-z0-9_./=-]+$"
+          },
+          "speaker_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]*$"
+          },
+          "language": {
+            "type": "string",
+            "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]+)*$"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the candidate is removed by lifecycle rules if it is not promoted."
+          }
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "pending",
+            "approved",
+            "rejected"
+          ]
+        },
+        "decided_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "approved",
+              "rejected"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "decided_at"
+        ]
+      }
+    },
+    "promotion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release_id",
+        "version",
+        "lineage"
+      ],
+      "properties": {
+        "release_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9._-]+@[a-z0-9._-]+$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[a-z0-9._-]+$"
+        },
+        "lineage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "job_id",
+            "input_sha256",
+            "output_sha256"
+          ],
+          "properties": {
+            "job_id": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]*$"
+            },
+            "input_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "output_sha256": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "succeeded"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "outputs": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "promotion"
+        ]
+      },
+      "then": {
+        "properties": {
+          "review": {
+            "properties": {
+              "status": {
+                "const": "approved"
+              }
+            }
+          },
+          "status": {
+            "const": "succeeded"
+          }
+        }
+      }
+    }
+  ]
+}

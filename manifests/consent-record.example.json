@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0.0",
+  "consent_id": "consent_caller_terms_v3",
+  "subject": {
+    "type": "human",
+    "speaker_id": "spk_c101",
+    "description": "Caller who accepted the recording and data-use terms, version 3."
+  },
+  "status": "active",
+  "granted_at": "2026-01-15T10:00:00Z",
+  "expires_at": "2028-01-15T10:00:00Z",
+  "permitted_uses": [
+    "training",
+    "evaluation",
+    "analytics"
+  ],
+  "license": {
+    "identifier": "LicenseRef-customer-terms-v3",
+    "attribution": "Not required."
+  },
+  "evidence": {
+    "kind": "terms-acceptance",
+    "reference": "protected/consents/consent_caller_terms_v3.json"
+  }
+}

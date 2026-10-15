@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0.0",
+  "session_id": "session-20260115-0001",
+  "started_at": "2026-01-15T10:00:00Z",
+  "ended_at": "2026-01-15T10:05:12Z",
+  "duration_seconds": 312.4,
+  "source": {
+    "platform": "livekit",
+    "capture": "native-s3-output"
+  },
+  "participants": [
+    {
+      "participant_id": "participant_caller",
+      "role": "caller"
+    },
+    {
+      "participant_id": "participant_agent",
+      "role": "agent"
+    }
+  ],
+  "recordings": [
+    {
+      "kind": "mixed",
+      "path": "audio/mix.ogg",
+      "size": 2518344,
+      "sha256": "1f49727210ae981abbb86a8794163598c1a327d6d6166df48aaa3dc6f7a78890",
+      "encoding_format": "audio/ogg",
+      "sample_rate_hz": 48000,
+      "channels": 1,
+      "duration_seconds": 312.4
+    },
+    {
+      "kind": "participant-track",
+      "path": "audio/participant_caller.ogg",
+      "participant_id": "participant_caller",
+      "size": 1304771,
+      "sha256": "2934e2eb7b99cd4ce41e77ed3c52089d730cad779d977d454248fd656d6f7aee",
+      "encoding_format": "audio/ogg",
+      "sample_rate_hz": 48000,
+      "channels": 1,
+      "duration_seconds": 312.4
+    },
+    {
+      "kind": "participant-track",
+      "path": "audio/participant_agent.ogg",
+      "participant_id": "participant_agent",
+      "size": 1288905,
+      "sha256": "188ce6c84f919e380c9b1f87595bf7d9d9385cb3733241c80085155c89bf13e0",
+      "encoding_format": "audio/ogg",
+      "sample_rate_hz": 48000,
+      "channels": 1,
+      "duration_seconds": 312.4
+    },
+    {
+      "kind": "events",
+      "path": "events/events.jsonl",
+      "size": 18422,
+      "sha256": "fba959be95b6cd17796c838712424fdd610a00cb7bc2f9e5bed47b0c9a32f2f0",
+      "encoding_format": "application/jsonlines"
+    }
+  ],
+  "consent_ids": [
+    "consent_caller_terms_v3"
+  ],
+  "retention": {
+    "class": "standard",
+    "delete_after": "2027-01-15T10:05:12Z"
+  },
+  "evaluation": {
+    "status": "passed",
+    "evaluated_at": "2026-01-15T10:07:30Z",
+    "evaluator": {
+      "name": "session-evaluator",
+      "version": "1.0.0"
+    },
+    "quality": {
+      "status": "pass",
+      "checks": [
+        {
+          "name": "audio-format",
+          "result": "pass"
+        },
+        {
+          "name": "speech-present",
+          "result": "pass",
+          "detail": "Both tracks contain speech."
+        },
+        {
+          "name": "not-clipped",
+          "result": "pass"
+        }
+      ]
+    },
+    "safety": {
+      "status": "pass",
+      "checks": [
+        {
+          "name": "consent-active",
+          "result": "pass"
+        },
+        {
+          "name": "no-sensitive-identifiers",
+          "result": "pass",
+          "detail": "No account or payment numbers were spoken."
+        }
+      ]
+    },
+    "eligible_for": [
+      "human-review",
+      "analytics",
+      "model-improvement"
+    ]
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0.0",
+  "job_id": "dub-20260115-0007",
+  "kind": "dubbing",
+  "created_at": "2026-01-15T11:00:00Z",
+  "status": "succeeded",
+  "provider": {
+    "name": "example-dubbing-provider",
+    "mode": "hosted-api",
+    "job_reference": "provider-job-8f3a",
+    "download_window_seconds": 900
+  },
+  "input": {
+    "key": "incoming/source/interview.wav",
+    "version_id": "4_zexampleversion",
+    "sha256": "095edaf28a34674f0d3d03a77fa3557d32a6d901d5e4b0d0e60069923f539899",
+    "delivery": {
+      "method": "presigned-get",
+      "expires_in_seconds": 3600
+    }
+  },
+  "parameters": {
+    "source_language": "en",
+    "target_languages": [
+      "es"
+    ],
+    "speakers": [
+      "spk_a",
+      "spk_b"
+    ]
+  },
+  "consent_ids": [
+    "consent_spk_a",
+    "consent_spk_b"
+  ],
+  "outputs": [
+    {
+      "kind": "candidate",
+      "key": "candidates/dub-20260115-0007/es/mix.wav",
+      "language": "es",
+      "size": 5120044,
+      "sha256": "d3c897d53274274148b6222f2cfb795f6d9649af82d9aab28f8aa58a1c216035",
+      "expires_at": "2026-01-22T11:00:00Z"
+    },
+    {
+      "kind": "stem",
+      "key": "candidates/dub-20260115-0007/es/spk_a.wav",
+      "speaker_id": "spk_a",
+      "language": "es",
+      "size": 2560044,
+      "sha256": "275b376b8d3dfb826a071f323062a5321b4394fe43ff286ac81edd409b413f0f",
+      "expires_at": "2026-01-22T11:00:00Z"
+    },
+    {
+      "kind": "stem",
+      "key": "candidates/dub-20260115-0007/es/spk_b.wav",
+      "speaker_id": "spk_b",
+      "language": "es",
+      "size": 2560044,
+      "sha256": "dfa95cf6f665836d304b48374049a86e03eb18bb6cac5a800c18c329bd2582a5",
+      "expires_at": "2026-01-22T11:00:00Z"
+    }
+  ],
+  "review": {
+    "status": "approved",
+    "decided_at": "2026-01-15T14:30:00Z"
+  },
+  "promotion": {
+    "release_id": "interview-es@v1",
+    "version": "v1",
+    "lineage": {
+      "job_id": "dub-20260115-0007",
+      "input_sha256": "095edaf28a34674f0d3d03a77fa3557d32a6d901d5e4b0d0e60069923f539899",
+      "output_sha256": [
+        "d3c897d53274274148b6222f2cfb795f6d9649af82d9aab28f8aa58a1c216035"
+      ]
+    }
+  }
+}
