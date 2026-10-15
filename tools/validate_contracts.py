@@ -14,11 +14,21 @@ With no arguments the whole repository is validated:
   dated evidence, a validation status that claims no more than its evidence, and the
   session evaluation step of the voice agent session archive;
 * the README has its required sections;
+* every application folder `applications/<name>/` has the shape that `AGENTS.md` describes:
+  the project files, a `.env.example` with the `B2_*` names and no endpoint variable, no
+  `package.json`, an upper bound on every requirement and dependency, copies in `shared/`
+  and `schemas/` that equal their sources, an entry in the `applications` job matrix of
+  `.github/workflows/ci.yml`, a section in `applications/README.md`, a README that warns
+  that a lifecycle or CORS command replaces rules, and no bucket configuration calls in
+  `src/`;
+* `.github/workflows/ci.yml` grants only `contents: read` and does not use `pull_request_target`;
+* every non-null `links.application` is `applications/<name>/README.md` of an application
+  folder that passes the rules above;
 * no text file contains the em dash character.
 
 Options:
-  --capability-map FILE   check one row per required B2 capability and no price figure
-  --require-applications N   require at least N public `links.application` repositories
+  --capability-map FILE      check one row per required B2 capability and no price figure
+  --require-applications N   require at least N catalog entries that link a valid application
 """
 from __future__ import annotations
 
@@ -27,12 +37,12 @@ import json
 import hashlib
 import re
 import sys
-import urllib.error
-import urllib.request
+import tomllib
 from datetime import datetime
 from pathlib import Path
 
 import jsonschema
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import audio_checks  # noqa: E402
@@ -48,6 +58,24 @@ SESSION_DURATION_SLACK_SECONDS = 1.0
 EM_DASH = chr(0x2014)
 TEXT_SUFFIXES = {".md", ".py", ".yml", ".yaml", ".json", ".jsonl", ".txt", ".cff", ".sh", ".ts", ".toml", ".cfg", ".ini"}
 SKIP_DIRS = {".git", ".venv", "node_modules", ".pytest_cache", "__pycache__"}
+
+APPLICATIONS_DIR = "applications"
+CI_WORKFLOW = Path(".github") / "workflows" / "ci.yml"
+APPLICATION_SECTIONS = ("What it shows", "Architecture", "Configurations it ships", "How to run", "Known limitations")
+APPLICATION_README_SECTIONS = ("B2's role", "Setup", "Tests", "Known limitations")
+APPLICATION_FILES = ("pyproject.toml", "requirements.txt", "requirements-dev.txt", ".gitignore", ".env.example", "README.md")
+APPLICATION_SOURCE_FILES = ("cli.py", "config.py", "storage.py")
+APPLICATION_TEST_FILES = ("conftest.py", "test_live.py")
+APPLICATION_GITIGNORE = (".env", "*.egg-info/", ".venv/", "__pycache__/", ".pytest_cache/")
+APPLICATION_ENV_NAMES = ("B2_APPLICATION_KEY_ID", "B2_APPLICATION_KEY", "B2_BUCKET_NAME", "B2_REGION")
+ENDPOINT_VARIABLE = re.compile(r"\bB2_(?:ENDPOINT|S3_ENDPOINT|KEY_ID)\b")
+PUBLIC_URL_BASE_COMMENTED = re.compile(r"^\s*#\s*B2_PUBLIC_URL_BASE=", re.MULTILINE)
+# Text that must not appear in an application's `src/`: bucket configuration and shortcuts to it.
+BUCKET_CONFIGURATION = (
+    "put_bucket_", "put_object_lock_configuration", "create_bucket", "delete_bucket", "b2_update_bucket",
+    "b2_set_bucket_notification_rules", ".Bucket(", "subprocess", "os.system", "bucket update", "bucket create",
+    "notification-rule", "--lifecycle-rules", "--cors-rules", "update-bucket",
+)
 
 # Catalog boundary id -> (label, text that must appear in the Boundaries section).
 BOUNDARIES = {
@@ -89,7 +117,6 @@ PRICE = re.compile(
 FENCE = re.compile(r"^\s*(```|~~~)")
 HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
-GITHUB_REPO = re.compile(r"^https://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?$")
 SAMPLE_ORG_URL = "https://github.com/backblaze-b2-samples/"
 TEST_LIKE = ("tests/", "examples/", "infrastructure/", "applications/")
 DOC_LIKE = ("architectures/", "docs/", "skill/")
@@ -472,36 +499,222 @@ def check_capability_map(root: Path, file: Path) -> list[str]:
     return errors
 
 
-def is_public_repository(url: str) -> bool:
-    """True when the GitHub repository answers an unauthenticated API request."""
-    match = GITHUB_REPO.match(url)
-    if not match:
-        return False
-    request = urllib.request.Request(
-        f"https://api.github.com/repos/{match.group(1)}/{match.group(2)}",
-        headers={"Accept": "application/vnd.github+json", "User-Agent": "b2-voice-ai-reference-architectures"},
-    )
+def unbounded_requirements(lines: list[str]) -> list[str]:
+    """Requirement lines (from a requirements file or a dependency list) that carry no upper bound."""
+    found = []
+    for line in lines:
+        requirement = line.split("#", 1)[0].strip()
+        if not requirement or requirement.startswith("-"):
+            continue
+        if not re.search(r"<|==|~=", requirement):
+            found.append(requirement)
+    return found
+
+
+def load_ci(root: Path) -> tuple[dict | None, list[str]]:
+    path = root / CI_WORKFLOW
+    if not path.is_file():
+        return None, [f"{CI_WORKFLOW.as_posix()} is missing"]
     try:
-        with urllib.request.urlopen(request, timeout=15) as response:
-            return response.status == 200
-    except (urllib.error.URLError, TimeoutError):
-        return False
+        workflow = yaml.safe_load(path.read_text())
+    except yaml.YAMLError as error:
+        return None, [f"{CI_WORKFLOW.as_posix()}: invalid YAML: {str(error).splitlines()[0]}"]
+    if not isinstance(workflow, dict):
+        return None, [f"{CI_WORKFLOW.as_posix()}: expected a mapping"]
+    return workflow, []
 
 
-def check_applications(catalog: dict, minimum: int, public=is_public_repository) -> list[str]:
-    urls = sorted({
-        entry["links"]["application"]
-        for entry in catalog["architectures"]
-        if entry["links"]["application"] and entry["links"]["application"].startswith("https://")
-    })
-    public_urls = [url for url in urls if public(url)]
-    if len(public_urls) < minimum:
-        return [f"{len(public_urls)} public links.application repositories, expected at least {minimum}"]
-    return []
+def check_ci_policy(workflow: dict | None) -> list[str]:
+    """The workflow grants read-only repository access and never runs on `pull_request_target`."""
+    if workflow is None:
+        return []
+    label = CI_WORKFLOW.as_posix()
+    errors = []
+    if workflow.get("permissions") != {"contents": "read"}:
+        errors.append(f"{label}: top-level permissions must be exactly {{contents: read}}")
+    # YAML 1.1 reads the key `on` as the boolean True.
+    triggers = workflow.get("on", workflow.get(True))
+    if "pull_request_target" in json.dumps(triggers, default=str):
+        errors.append(f"{label}: must not use pull_request_target")
+    return errors
 
 
-def validate_repository(root: Path = ROOT, capability_map: Path | None = None, require_applications: int | None = None,
-                        public=is_public_repository) -> list[str]:
+def ci_matrix(workflow: dict | None) -> list[str] | None:
+    """The `app` values of the `applications` job matrix, or None when the job or matrix is missing."""
+    try:
+        values = workflow["jobs"]["applications"]["strategy"]["matrix"]["app"]
+    except (KeyError, TypeError):
+        return None
+    return [str(value) for value in values] if isinstance(values, list) else None
+
+
+def application_folders(root: Path) -> list[Path]:
+    base = root / APPLICATIONS_DIR
+    if not base.is_dir():
+        return []
+    return sorted(path for path in base.iterdir()
+                  if path.is_dir() and not path.name.startswith(".") and path.name not in SKIP_DIRS)
+
+
+def check_application_pyproject(folder: Path, label: str, package: str) -> list[str]:
+    path = folder / "pyproject.toml"
+    try:
+        data = tomllib.loads(path.read_text())
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        return [f"{label}: pyproject.toml cannot be read: {str(error).splitlines()[0]}"]
+    errors = []
+    project = data.get("project", {})
+    if project.get("name") != folder.name:
+        errors.append(f"{label}: pyproject.toml project name must be {folder.name}")
+    if not project.get("requires-python"):
+        errors.append(f"{label}: pyproject.toml needs requires-python")
+    if "setuptools" not in str(data.get("build-system", {}).get("build-backend", "")):
+        errors.append(f"{label}: pyproject.toml [build-system] must use setuptools")
+    command = project.get("scripts", {}).get(folder.name)
+    if not isinstance(command, str) or not command.startswith(f"{package}.cli:"):
+        errors.append(f"{label}: [project.scripts] needs {folder.name} = \"{package}.cli:<function>\"")
+    package_data = data.get("tool", {}).get("setuptools", {}).get("package-data", {})
+    if not any("schemas/*.json" in patterns for patterns in package_data.values() if isinstance(patterns, list)):
+        errors.append(f"{label}: [tool.setuptools.package-data] must include schemas/*.json")
+    pytest_options = data.get("tool", {}).get("pytest", {}).get("ini_options", {})
+    if pytest_options.get("testpaths") != ["tests"]:
+        errors.append(f"{label}: [tool.pytest.ini_options] testpaths must be [\"tests\"]")
+    if pytest_options.get("pythonpath") != ["src"]:
+        errors.append(f"{label}: [tool.pytest.ini_options] pythonpath must be [\"src\"]")
+    if not any(str(marker).startswith("live") for marker in pytest_options.get("markers", [])):
+        errors.append(f"{label}: [tool.pytest.ini_options] must declare the live marker")
+    for requirement in unbounded_requirements(list(project.get("dependencies", []))):
+        errors.append(f"{label}: pyproject.toml dependency {requirement} has no upper bound")
+    return errors
+
+
+def check_application_copies(root: Path, folder: Path, label: str, package_dir: Path) -> list[str]:
+    """Code under `shared/` and schemas under `schemas/` must be unchanged copies of their sources."""
+    errors = []
+    shared = package_dir / "shared"
+    if shared.is_dir():
+        if not (shared / "__init__.py").is_file():
+            errors.append(f"{label}: src/{package_dir.name}/shared/__init__.py is missing")
+        for copy in sorted(shared.glob("*.py")):
+            if copy.name == "__init__.py":
+                continue
+            sources = [root / "examples" / "python" / copy.name, root / "tools" / copy.name]
+            source = next((item for item in sources if item.is_file()), None)
+            if source is None:
+                errors.append(f"{label}: shared/{copy.name} has no source in examples/python/ or tools/")
+            elif source.read_bytes() != copy.read_bytes():
+                errors.append(f"{label}: shared/{copy.name} differs from {source.relative_to(root).as_posix()}; copy it again")
+    schemas = package_dir / "schemas"
+    if schemas.is_dir():
+        for copy in sorted(schemas.glob("*.json")):
+            source = root / "schemas" / copy.name
+            if not source.is_file():
+                errors.append(f"{label}: schemas/{copy.name} has no source in schemas/")
+            elif source.read_bytes() != copy.read_bytes():
+                errors.append(f"{label}: schemas/{copy.name} differs from schemas/{copy.name} at the repository root; copy it again")
+    return errors
+
+
+def check_application(root: Path, folder: Path, matrix: list[str] | None, readme_sections: list[tuple[int, str, str]]) -> list[str]:
+    """Check one `applications/<name>/` folder against the rules in AGENTS.md."""
+    name = folder.name
+    label = f"{APPLICATIONS_DIR}/{name}"
+    package = name.replace("-", "_")
+    errors = [f"{label}: missing {item}" for item in APPLICATION_FILES if not (folder / item).is_file()]
+    package_dir = folder / "src" / package
+    if not package_dir.is_dir():
+        errors.append(f"{label}: missing src/{package}/")
+    else:
+        errors.extend(f"{label}: missing src/{package}/{item}" for item in APPLICATION_SOURCE_FILES
+                      if not (package_dir / item).is_file())
+        errors.extend(check_application_copies(root, folder, label, package_dir))
+        for path in sorted(package_dir.rglob("*.py")):
+            text = path.read_text()
+            for pattern in BUCKET_CONFIGURATION:
+                if pattern in text:
+                    errors.append(f"{label}: {path.relative_to(folder).as_posix()} contains '{pattern}'; "
+                                  "bucket configuration ships as templates and commands, never as application code")
+    errors.extend(f"{label}: missing tests/{item}" for item in APPLICATION_TEST_FILES
+                  if not (folder / "tests" / item).is_file())
+    if list(folder.rglob("package.json")):
+        errors.append(f"{label}: contains a package.json; applications are Python command-line tools")
+    if (folder / "pyproject.toml").is_file():
+        errors.extend(check_application_pyproject(folder, label, package))
+    for requirements in ("requirements.txt", "requirements-dev.txt"):
+        path = folder / requirements
+        if path.is_file():
+            errors.extend(f"{label}: {requirements}: {item} has no upper bound"
+                          for item in unbounded_requirements(path.read_text().splitlines()))
+    environment = folder / ".env.example"
+    if environment.is_file():
+        text = environment.read_text()
+        for variable in APPLICATION_ENV_NAMES:
+            if not re.search(rf"^{variable}=", text, re.MULTILINE):
+                errors.append(f"{label}: .env.example must set {variable}")
+        if not PUBLIC_URL_BASE_COMMENTED.search(text):
+            errors.append(f"{label}: .env.example must carry a commented # B2_PUBLIC_URL_BASE= line")
+        if ENDPOINT_VARIABLE.search(text):
+            errors.append(f"{label}: .env.example must not define an endpoint or key id alias "
+                          "(B2_ENDPOINT, B2_S3_ENDPOINT, B2_KEY_ID); the endpoint is derived from B2_REGION")
+    gitignore = folder / ".gitignore"
+    if gitignore.is_file():
+        entries = {line.strip() for line in gitignore.read_text().splitlines()}
+        errors.extend(f"{label}: .gitignore must list {entry}" for entry in APPLICATION_GITIGNORE if entry not in entries)
+    readme = folder / "README.md"
+    if readme.is_file():
+        text = readme.read_text()
+        found = sections(text)
+        errors.extend(f"{label}: README.md missing section '{item}'" for item in APPLICATION_README_SECTIONS
+                      if find_section(found, item) is None)
+        if ("--lifecycle-rule" in text or "put-bucket-cors" in text) and not re.search(r"\breplaces\b", text, re.IGNORECASE):
+            errors.append(f"{label}: README.md shows a lifecycle or CORS command; say that it replaces all of the bucket's rules")
+    if matrix is None or name not in matrix:
+        errors.append(f"{label}: not listed in the applications job matrix of {CI_WORKFLOW.as_posix()}")
+    entry = next((body for level, title, body in readme_sections
+                  if level == 2 and normalize(title) == normalize(name)), None)
+    if entry is None:
+        errors.append(f"{label}: applications/README.md has no section '## {name}'")
+    else:
+        inner = sections(entry)
+        errors.extend(f"{label}: applications/README.md section '{name}' missing '{item}'"
+                      for item in APPLICATION_SECTIONS if find_section(inner, item) is None)
+    return errors
+
+
+def application_target(link: str) -> str | None:
+    """The folder name of a `links.application` value shaped `applications/<name>/README.md`."""
+    match = re.fullmatch(rf"{APPLICATIONS_DIR}/([A-Za-z0-9][A-Za-z0-9_-]*)/README\.md", link)
+    return match.group(1) if match else None
+
+
+def check_applications(root: Path, catalog: dict, minimum: int | None, workflow: dict | None) -> list[str]:
+    """Check every application folder, the catalog links to them and the minimum count."""
+    readme = root / APPLICATIONS_DIR / "README.md"
+    readme_sections = sections(readme.read_text()) if readme.is_file() else []
+    matrix = ci_matrix(workflow)
+    errors: list[str] = []
+    problems: dict[str, list[str]] = {}
+    for folder in application_folders(root):
+        problems[folder.name] = check_application(root, folder, matrix, readme_sections)
+        errors.extend(problems[folder.name])
+    valid_links = 0
+    for entry in catalog["architectures"]:
+        link = entry["links"]["application"]
+        if not link:
+            continue
+        target = application_target(link)
+        if target is None or target not in problems:
+            errors.append(f"{entry['id']}: links.application must be applications/<name>/README.md of an application folder, got {link}")
+        elif problems[target]:
+            errors.append(f"{entry['id']}: links.application points to {target}, which does not pass the application rules")
+        else:
+            valid_links += 1
+    if minimum is not None and valid_links < minimum:
+        errors.append(f"{valid_links} catalog entries link a valid application, expected at least {minimum}")
+    return errors
+
+
+def validate_repository(root: Path = ROOT, capability_map: Path | None = None, require_applications: int | None = None) -> list[str]:
     errors = check_schemas(root) + check_manifest_examples(root) + check_fixtures(root)
     try:
         catalog = generate_catalog.load_catalog(root)
@@ -514,18 +727,21 @@ def validate_repository(root: Path = ROOT, capability_map: Path | None = None, r
         seen.add(entry["id"])
         errors.extend(check_architecture(root, entry))
     errors.extend(check_readme(root))
+    workflow, ci_errors = load_ci(root)
+    errors.extend(ci_errors)
+    errors.extend(check_ci_policy(workflow))
+    errors.extend(check_applications(root, catalog, require_applications, workflow))
     errors.extend(check_no_em_dash(root))
     if capability_map is not None:
         errors.extend(check_capability_map(root, capability_map))
-    if require_applications is not None:
-        errors.extend(check_applications(catalog, require_applications, public))
     return errors
 
 
 def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--capability-map", type=Path, help="Markdown capability map to check")
-    parser.add_argument("--require-applications", type=int, help="minimum number of public links.application repositories")
+    parser.add_argument("--require-applications", type=int,
+                        help="minimum number of catalog entries that link a valid application")
     args = parser.parse_args(argv)
     errors = validate_repository(root, args.capability_map, args.require_applications)
     if errors:

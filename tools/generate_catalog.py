@@ -45,6 +45,8 @@ LLMS_RESOURCES = [
      "CORS, lifecycle, Event Notifications, Object Lock, replication, encryption and scoped keys."),
     ("Infrastructure helpers", "infrastructure/README.md",
      "LiveKit Egress output to B2 and provisioning of per-zone buckets and scoped keys."),
+    ("Sample applications", "applications/README.md",
+     "Python command-line applications that implement the architectures, with tests that run against an emulated S3 server."),
     ("Related B2 sample applications", "docs/related-b2-samples.md",
      "Existing sample applications that exercise these workflows."),
 ]

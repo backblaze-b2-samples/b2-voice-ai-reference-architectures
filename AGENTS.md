@@ -24,7 +24,7 @@ State the evidence basis when it matters to a recommendation. Documentation revi
 | `schemas/`, `manifests/` | JSON Schemas and valid example manifests |
 | `testdata/synthetic-speech/` | Synthetic speech fixtures, valid and deliberately invalid |
 | `skill/` | The `b2-voice-speech-ai` agent skill (`SKILL.md`, `references/`); `skill/references/architecture-catalog.md` is generated |
-| `applications/` | Sample applications that implement the architectures (the page lists none yet) |
+| `applications/` | Python command-line applications that implement the architectures; see `applications/README.md` |
 | `metadata/` | Index of the repository's metadata files |
 | `tools/` | Generator, validators, link check, fixture builder, diagram renderer |
 | `tests/` | Tests that run without a B2 account |
@@ -51,6 +51,14 @@ bash tools/run_ts_examples.sh
 
 `python tools/check_markdown_links.py --external docs/related-b2-samples.md` checks that the external links of that page respond; it needs network access, so CI does not run it. Re-run the four B2 convention checks on a fresh clone of a sample and update its date on that page before adding or keeping a row.
 
+Run one application's tests from its own folder; CI does the same for each application in the `applications` job matrix. They need no B2 account: the applications use a single `B2_BUCKET_NAME` (a bucket on the emulated S3 server) with the zones as prefixes.
+
+```bash
+cd applications/<name>
+pip install -r requirements-dev.txt -e .
+python -m pytest -q
+```
+
 Regenerate after editing the catalog, and re-render after editing the diagram script:
 
 ```bash
@@ -73,11 +81,26 @@ Do not hand-edit the generated sections in `README.md` (between the `catalog:` m
 - Keep the README sections `Where state lives`, `Clean up`, `Known limitations` (which states that isolation between tenants is not covered) and `Partner integration options`.
 - Do not use the em dash character in any file; the validator rejects it.
 
+## Applications
+
+Each application in `applications/<name>/` is a small Python command-line tool that implements one architecture of the catalog. Every application keeps this shape:
+
+- `pyproject.toml` with the project name `<name>`, a console script of the same name and the schemas as package data; the package in `src/<package>/` (the folder name with hyphens replaced by underscores); `requirements.txt` and `requirements-dev.txt` with an upper bound on every dependency; a `.gitignore`.
+- A `.env.example` file with `B2_APPLICATION_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME` and `B2_REGION`, and `B2_PUBLIC_URL_BASE` commented out. The endpoint is derived from `B2_REGION`; do not add an endpoint variable. The command-line entry point reads the env file only from the current directory.
+- One bucket per run, with the zones as top-level prefixes (`incoming/`, `work/`, `releases/`, `protected/`). The README says that production deployments use one bucket per zone, as the architectures do.
+- Tests in `tests/` against an emulated S3 server (moto) on the loopback interface, with no other network access and no credentials. `tests/test_live.py` runs only when `RUN_B2_LIVE_TESTS=1` and the `B2_*` variables are set, writes only under `live-test/<uuid>/` and removes what it writes.
+- A README with the sections "B2's role", "Setup", "Tests" and "Known limitations".
+- A server or webhook receiver only when the workflow needs one; no web frontend or dashboard.
+- Bucket configuration (lifecycle, CORS, Event Notifications, Object Lock, replication) ships as templates and commands. Application code never applies it, and a test proves that the workflow sends no bucket configuration request. A README that shows a lifecycle or CORS command says, before the command, that it replaces all of the bucket's rules.
+- `storage.py` builds the application's own S3 client, with its own user agent. Other code reused from `examples/python/` or `tools/` is copied unchanged into `src/<package>/shared/`, and schemas into `src/<package>/schemas/`. The validator fails when a copy differs from its source: change the source, then copy it again.
+- Each application owns its test and demo data, generated deterministically inside the application (a synthesis module or a seeded fixture written to a temporary directory). It may read `testdata/synthetic-speech/` where that fits, never as a requirement, and it never modifies or regenerates that folder, which stays a fixture of the repository's own tools and tests.
+- Each application is listed in the `applications` job matrix of `.github/workflows/ci.yml`, has a section in `applications/README.md`, and is linked from its catalog entry through `links.application`.
+
 ## Operational invariants
 
 - Derive the endpoint `https://s3.<region>.backblazeb2.com` from the bucket's region; do not hardcode a real region, bucket or account.
-- Read credentials and bucket names from the environment (`B2_APPLICATION_KEY_ID`, `B2_APPLICATION_KEY`, `B2_REGION`, `B2_INCOMING_BUCKET`, `B2_WORK_BUCKET`, `B2_RELEASES_BUCKET`, `B2_PROTECTED_BUCKET`, `B2_EVENT_SIGNING_SECRET`). Never commit keys, real presigned URLs, recordings of real people or customer data.
-- Use one bucket per zone and one scoped application key per component and prefix. Keep master or administrative keys out of runtime services.
+- Read credentials and bucket names from the environment. The examples and architectures use `B2_APPLICATION_KEY_ID`, `B2_APPLICATION_KEY`, `B2_REGION`, `B2_INCOMING_BUCKET`, `B2_WORK_BUCKET`, `B2_RELEASES_BUCKET`, `B2_PROTECTED_BUCKET` and `B2_EVENT_SIGNING_SECRET`; the applications use `B2_BUCKET_NAME` instead of the zone buckets. Never commit keys, real presigned URLs, recordings of real people or customer data.
+- In the examples and architectures, use one bucket per zone and one scoped application key per component and prefix. The applications use a single `B2_BUCKET_NAME` with the zones as top-level prefixes (see Applications). Keep master or administrative keys out of runtime services.
 - Treat presigned URLs and delivery manifests as bearer credentials: short lifetimes, never logged.
 - Write each manifest last, as the completion marker, and never rewrite a published release or delivery version.
 - Verify Event Notification signatures on the raw body and process each `eventId` once; delivery is at least once.
