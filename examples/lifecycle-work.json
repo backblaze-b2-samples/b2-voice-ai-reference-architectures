@@ -1,0 +1,26 @@
+[
+  {
+    "fileNamePrefix": "candidates/",
+    "daysFromUploadingToHiding": 14,
+    "daysFromHidingToDeleting": 1,
+    "daysFromStartingToCancelingUnfinishedLargeFiles": null
+  },
+  {
+    "fileNamePrefix": "scratch/",
+    "daysFromUploadingToHiding": 3,
+    "daysFromHidingToDeleting": 1,
+    "daysFromStartingToCancelingUnfinishedLargeFiles": null
+  },
+  {
+    "fileNamePrefix": "evaluations/",
+    "daysFromUploadingToHiding": null,
+    "daysFromHidingToDeleting": 30,
+    "daysFromStartingToCancelingUnfinishedLargeFiles": null
+  },
+  {
+    "fileNamePrefix": "",
+    "daysFromUploadingToHiding": null,
+    "daysFromHidingToDeleting": null,
+    "daysFromStartingToCancelingUnfinishedLargeFiles": 1
+  }
+]

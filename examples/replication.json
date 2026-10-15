@@ -1,0 +1,15 @@
+{
+  "asReplicationSource": {
+    "replicationRules": [
+      {
+        "replicationRuleName": "releases-second-region",
+        "destinationBucketId": "<destination-bucket-id>",
+        "fileNamePrefix": "",
+        "includeExistingFiles": true,
+        "isEnabled": true,
+        "priority": 1
+      }
+    ],
+    "sourceApplicationKeyId": "<source-application-key-id>"
+  }
+}

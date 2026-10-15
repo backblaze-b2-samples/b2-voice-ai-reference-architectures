@@ -1,0 +1,8 @@
+[
+  {
+    "fileNamePrefix": "",
+    "daysFromUploadingToHiding": null,
+    "daysFromHidingToDeleting": null,
+    "daysFromStartingToCancelingUnfinishedLargeFiles": 7
+  }
+]

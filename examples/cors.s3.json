@@ -1,0 +1,26 @@
+{
+  "CORSRules": [
+    {
+      "ID": "browser-presigned-upload-and-playback",
+      "AllowedOrigins": [
+        "https://app.example.com"
+      ],
+      "AllowedMethods": [
+        "GET",
+        "HEAD",
+        "PUT"
+      ],
+      "AllowedHeaders": [
+        "content-type",
+        "content-md5",
+        "range"
+      ],
+      "ExposeHeaders": [
+        "ETag",
+        "Content-Length",
+        "Content-Range"
+      ],
+      "MaxAgeSeconds": 3600
+    }
+  ]
+}

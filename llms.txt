@@ -8,6 +8,7 @@ Canonical Backblaze product documentation: https://www.backblaze.com/docs/cloud-
 
 - [Architecture index](docs/architecture-index.md): Human-readable index generated from the catalog.
 - [Machine-readable catalog](catalog/architectures.yaml): Audiences, workflows, boundaries, capabilities, evidence, security and resource links.
+- [B2 capability map](docs/b2-capabilities.md): What each B2 capability does, what it requires, its limitations and which architecture uses it.
 
 ## Contracts and schemas
 
@@ -18,6 +19,10 @@ Canonical Backblaze product documentation: https://www.backblaze.com/docs/cloud-
 - [Voice generation job manifest schema](schemas/generation-job-manifest.schema.json): JSON Schema.
 - [Voice dataset release manifest schema](schemas/release-manifest.schema.json): JSON Schema.
 - [Voice agent session manifest schema](schemas/session-manifest.schema.json): JSON Schema.
+
+## Configuration and related resources
+
+- [B2 configuration examples](examples/README.md): CORS, lifecycle, Event Notifications, Object Lock, replication, encryption and scoped keys.
 
 ## Official product documentation
 

@@ -1,0 +1,26 @@
+[
+  {
+    "fileNamePrefix": "contributions/",
+    "daysFromUploadingToHiding": 30,
+    "daysFromHidingToDeleting": 1,
+    "daysFromStartingToCancelingUnfinishedLargeFiles": null
+  },
+  {
+    "fileNamePrefix": "sessions/",
+    "daysFromUploadingToHiding": 30,
+    "daysFromHidingToDeleting": 1,
+    "daysFromStartingToCancelingUnfinishedLargeFiles": null
+  },
+  {
+    "fileNamePrefix": "source/",
+    "daysFromUploadingToHiding": 14,
+    "daysFromHidingToDeleting": 1,
+    "daysFromStartingToCancelingUnfinishedLargeFiles": null
+  },
+  {
+    "fileNamePrefix": "",
+    "daysFromUploadingToHiding": null,
+    "daysFromHidingToDeleting": null,
+    "daysFromStartingToCancelingUnfinishedLargeFiles": 2
+  }
+]

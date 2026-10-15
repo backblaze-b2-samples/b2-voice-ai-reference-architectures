@@ -1,0 +1,40 @@
+{
+  "eventNotificationRules": [
+    {
+      "name": "validate-contributions",
+      "eventTypes": [
+        "b2:ObjectCreated:*"
+      ],
+      "isEnabled": true,
+      "objectNamePrefix": "contributions/",
+      "targetConfiguration": {
+        "targetType": "webhook",
+        "url": "https://hooks.example.com/b2/contributions"
+      }
+    },
+    {
+      "name": "evaluate-sessions",
+      "eventTypes": [
+        "b2:ObjectCreated:*"
+      ],
+      "isEnabled": true,
+      "objectNamePrefix": "sessions/",
+      "targetConfiguration": {
+        "targetType": "webhook",
+        "url": "https://hooks.example.com/b2/sessions"
+      }
+    },
+    {
+      "name": "review-generation-sources",
+      "eventTypes": [
+        "b2:ObjectCreated:*"
+      ],
+      "isEnabled": true,
+      "objectNamePrefix": "source/",
+      "targetConfiguration": {
+        "targetType": "webhook",
+        "url": "https://hooks.example.com/b2/sources"
+      }
+    }
+  ]
+}

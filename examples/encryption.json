@@ -1,0 +1,6 @@
+{
+  "defaultServerSideEncryption": {
+    "mode": "SSE-B2",
+    "algorithm": "AES256"
+  }
+}
