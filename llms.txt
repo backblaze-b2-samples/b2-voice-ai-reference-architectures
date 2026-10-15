@@ -13,6 +13,7 @@ Canonical Backblaze product documentation: https://www.backblaze.com/docs/cloud-
 ## Architectures
 
 - [Voice training data lifecycle](architectures/voice-training-data-lifecycle/architecture.md): Collect speech with consent, validate and review it, and publish immutable dataset releases that NeMo, Lhotse, Hugging Face Datasets, WebDataset and MosaicML Streaming read from B2.
+- [Batch voice generation and dubbing](architectures/batch-voice-generation-and-dubbing/architecture.md): Send sources to dubbing, speech synthesis and transcription providers through presigned GET URLs, keep every output as an expiring candidate, and promote reviewed outputs to immutable deliveries with lineage.
 
 ## Contracts and schemas
 

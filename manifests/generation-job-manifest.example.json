@@ -11,7 +11,7 @@
     "download_window_seconds": 900
   },
   "input": {
-    "key": "incoming/source/interview.wav",
+    "key": "source/interview.wav",
     "version_id": "4_zexampleversion",
     "sha256": "095edaf28a34674f0d3d03a77fa3557d32a6d901d5e4b0d0e60069923f539899",
     "delivery": {

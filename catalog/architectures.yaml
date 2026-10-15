@@ -143,3 +143,118 @@ architectures:
       deployment: infrastructure/b2-provisioning/README.md
       sample_data: testdata/synthetic-speech/README.md
       release_contract: schemas/release-manifest.schema.json
+  - id: batch-voice-generation-and-dubbing
+    name: Batch voice generation and dubbing
+    slug: batch-voice-generation-and-dubbing
+    summary: Send sources to dubbing, speech synthesis and transcription providers through presigned GET URLs, keep every output as an expiring candidate, and promote reviewed outputs to immutable deliveries with lineage.
+    audience:
+      - Backend engineers
+      - Media pipeline engineers
+      - ML engineers
+      - Platform engineers
+    problem: Batch dubbing, speech synthesis and transcription jobs produce many outputs from hosted providers that return results through their own APIs; each output needs review, unused outputs must expire, and every delivered file must trace back to its source, job and consent.
+    workflow:
+      - Upload the source to the incoming zone
+      - Start a job on a signed Event Notification and check consent
+      - Submit the job with a presigned GET URL sized to the provider's download window
+      - Collect outputs on callback or by polling and copy them to candidates
+      - Review candidates through short-lived presigned URLs
+      - Promote approved outputs to an immutable delivery version with lineage
+      - Deliver through short-lived URLs or a private CDN while candidates expire
+    boundaries:
+      - real-time-voice-transport
+      - low-latency-session-store
+      - message-queue
+      - transcription-or-voice-model
+      - workflow-orchestrator
+      - metadata-catalog
+      - vector-database
+      - gpu-cache-or-training-storage
+    capabilities:
+      - S3-compatible API
+      - Presigned URLs and CORS
+      - Multipart upload with resume
+      - Application keys with limited scope
+      - Event Notifications with a signed, idempotent webhook
+      - Versions and lifecycle rules
+      - Server-side encryption
+      - Object Lock
+      - Cloud Replication
+      - Private delivery through a CDN
+      - Delivery through compute partners
+      - Local processing or GPU cache
+    integrations:
+      - id: elevenlabs-dubbing
+        name: ElevenLabs Dubbing
+        role: Dubbing into other languages, with speaker detection and voice cloning
+        connection: Reads the source from a presigned GET URL passed as source_url; the application downloads the dubbed audio and subtitles from the signed output URLs and writes them to B2
+        connection_type: application-copy
+        url: https://elevenlabs.io/docs/api-reference/dubbing/create-project
+        evidence: Dubbing project, language target and webhooks API reference, read 2026-10-15
+      - id: deepgram
+        name: Deepgram
+        role: Pre-recorded transcription, diarization and English audio intelligence
+        connection: Reads the source from a presigned GET URL in the url field; the transcript returns in the response or by callback and the application writes it to B2
+        connection_type: application-copy
+        url: https://developers.deepgram.com/docs/pre-recorded-audio
+        evidence: Pre-recorded audio, callback and S3 presigned URL guides, read 2026-10-15
+      - id: assemblyai
+        name: AssemblyAI
+        role: Batch transcription, speaker labels and transcript analysis
+        connection: Reads the source from a presigned GET URL passed as audio_url; the application fetches the transcript after the webhook or by polling and writes it to B2
+        connection_type: application-copy
+        url: https://www.assemblyai.com/docs/api-reference/transcripts/submit
+        evidence: Submit transcript reference, webhooks guide and common errors guide, read 2026-10-15
+      - id: cloudflare-cdn
+        name: Cloudflare CDN
+        role: Private delivery of approved outputs
+        connection: A Cloudflare Worker signs each request to the private releases bucket's S3 endpoint with an application key scoped to deliveries
+        connection_type: native-s3-output
+        url: https://www.backblaze.com/docs/cloud-storage-deliver-private-backblaze-b2-content-through-cloudflare-cdn
+        evidence: Backblaze guide for private content through Cloudflare CDN, linked from the capability map, read 2026-10-15
+    prerequisites:
+      - A B2 account with four private buckets, one per zone
+      - Event Notifications enabled for the account, or a polling fallback
+      - A queue and job runner outside B2
+      - An account with each hosted provider used, or a self-hosted model
+      - A public HTTPS endpoint for provider callbacks, or polling
+      - A consent service and a review tool
+    expected_scale:
+      profile: From a few jobs a day to continuous batches of dubbing and transcription
+      notes: Throughput is bound by the providers' job limits and the runner's concurrency, not by B2. Each output is stored at least twice while a candidate and its delivery coexist; candidate lifecycle bounds that overlap.
+    validation:
+      status: documentation-reviewed
+      date: "2026-10-15"
+      methods:
+        - Provider behavior checked against ElevenLabs, Deepgram and AssemblyAI documentation on 2026-10-15
+        - B2 behavior checked against the Backblaze documentation linked from the capability map
+        - Generation job manifest example validated against its schema in CI
+      evidence:
+        - architectures/batch-voice-generation-and-dubbing/architecture.md
+        - docs/b2-capabilities.md
+        - https://elevenlabs.io/docs/api-reference/dubbing/create-project
+        - https://elevenlabs.io/docs/api-reference/dubbing/language-targets/get-language-target
+        - https://elevenlabs.io/docs/eleven-api/resources/webhooks
+        - https://developers.deepgram.com/docs/callback
+        - https://developers.deepgram.com/docs/using-aws-s3-presigned-urls-with-the-deepgram-api
+        - https://www.assemblyai.com/docs/api-reference/transcripts/submit
+        - https://www.assemblyai.com/docs/deployment/webhooks
+        - https://www.assemblyai.com/docs/pre-recorded-audio/guides/common_errors_and_solutions
+    security_considerations:
+      - One presigned GET URL per job and object version, signed just before submission; hosted providers never receive a key
+      - Presigned URL lifetime longer than the provider's download window and recorded in the job manifest, never the URL itself
+      - Provider callbacks verified by signature or configured credentials and handled idempotently
+      - One application key per component and prefix; delivery keys read-only and scoped to deliveries
+      - SSE-B2 default encryption; object names and metadata carry job ids and pseudonymous speaker ids only
+    compliance_considerations:
+      - Speaker consent, including voice cloning, checked before every submission
+      - Provider retention and data-use terms checked against consent before sending recordings
+      - Unpromoted candidates and sources expire through lifecycle rules
+      - Consent withdrawal stops new jobs and allows affected deliveries to be removed
+      - Lineage from delivered file to source version, job and consent ids
+    links:
+      architecture: architectures/batch-voice-generation-and-dubbing/architecture.md
+      application: null
+      deployment: infrastructure/b2-provisioning/README.md
+      sample_data: testdata/synthetic-speech/README.md
+      release_contract: schemas/generation-job-manifest.schema.json

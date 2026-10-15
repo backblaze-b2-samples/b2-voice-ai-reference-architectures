@@ -14,6 +14,15 @@ Collect speech with consent, validate and review it, and publish immutable datas
 - **Workflow:** Record consent in the protected zone -> Upload clips with presigned PUT URLs -> Validate and normalize on signed Event Notifications -> Review transcripts in Label Studio -> Build an immutable release with manifests and shards -> Read the release through a local cache for training
 - **Expected scale:** From thousands of clips to multi-terabyte speech corpora. Collection and review run at any scale on standard B2. Training reads go through a local cache; B2 Overdrive applies only when sustained aggregate read throughput is the measured constraint.
 
+## [Batch voice generation and dubbing](../architectures/batch-voice-generation-and-dubbing/architecture.md)
+
+Send sources to dubbing, speech synthesis and transcription providers through presigned GET URLs, keep every output as an expiring candidate, and promote reviewed outputs to immutable deliveries with lineage.
+
+- **Audience:** Backend engineers, Media pipeline engineers, ML engineers, Platform engineers
+- **Problem:** Batch dubbing, speech synthesis and transcription jobs produce many outputs from hosted providers that return results through their own APIs; each output needs review, unused outputs must expire, and every delivered file must trace back to its source, job and consent.
+- **Workflow:** Upload the source to the incoming zone -> Start a job on a signed Event Notification and check consent -> Submit the job with a presigned GET URL sized to the provider's download window -> Collect outputs on callback or by polling and copy them to candidates -> Review candidates through short-lived presigned URLs -> Promote approved outputs to an immutable delivery version with lineage -> Deliver through short-lived URLs or a private CDN while candidates expire
+- **Expected scale:** From a few jobs a day to continuous batches of dubbing and transcription. Throughput is bound by the providers' job limits and the runner's concurrency, not by B2. Each output is stored at least twice while a candidate and its delivery coexist; candidate lifecycle bounds that overlap.
+
 ## Partner integration options
 
 | Tool | Role | How it connects to B2 | Connection type | Architectures |
@@ -26,6 +35,10 @@ Collect speech with consent, validate and review it, and publish immutable datas
 | [Label Studio](https://labelstud.io/guide/storage_s3) | Transcript and label review | Amazon S3 storage type with the S3 endpoint field set to B2; source storage with pre-signed URLs and target storage for annotations | Provider uses an S3-compatible endpoint | [Voice training data lifecycle](../architectures/voice-training-data-lifecycle/architecture.md) |
 | [MLflow](https://mlflow.org/docs/latest/self-hosting/architecture/artifact-store/) | Experiment tracking and artifact storage | Artifact root on an s3 path with MLFLOW_S3_ENDPOINT_URL set to the B2 S3 endpoint | Provider uses an S3-compatible endpoint | [Voice training data lifecycle](../architectures/voice-training-data-lifecycle/architecture.md) |
 | [DVC](https://doc.dvc.org/user-guide/data-management/remote-storage/amazon-s3) | Data versioning pinned by Git commits | S3 remote with endpointurl set to the B2 S3 endpoint | Provider uses an S3-compatible endpoint | [Voice training data lifecycle](../architectures/voice-training-data-lifecycle/architecture.md) |
+| [ElevenLabs Dubbing](https://elevenlabs.io/docs/api-reference/dubbing/create-project) | Dubbing into other languages, with speaker detection and voice cloning | Reads the source from a presigned GET URL passed as source_url; the application downloads the dubbed audio and subtitles from the signed output URLs and writes them to B2 | Application copies data to or from B2 | [Batch voice generation and dubbing](../architectures/batch-voice-generation-and-dubbing/architecture.md) |
+| [Deepgram](https://developers.deepgram.com/docs/pre-recorded-audio) | Pre-recorded transcription, diarization and English audio intelligence | Reads the source from a presigned GET URL in the url field; the transcript returns in the response or by callback and the application writes it to B2 | Application copies data to or from B2 | [Batch voice generation and dubbing](../architectures/batch-voice-generation-and-dubbing/architecture.md) |
+| [AssemblyAI](https://www.assemblyai.com/docs/api-reference/transcripts/submit) | Batch transcription, speaker labels and transcript analysis | Reads the source from a presigned GET URL passed as audio_url; the application fetches the transcript after the webhook or by polling and writes it to B2 | Application copies data to or from B2 | [Batch voice generation and dubbing](../architectures/batch-voice-generation-and-dubbing/architecture.md) |
+| [Cloudflare CDN](https://www.backblaze.com/docs/cloud-storage-deliver-private-backblaze-b2-content-through-cloudflare-cdn) | Private delivery of approved outputs | A Cloudflare Worker signs each request to the private releases bucket's S3 endpoint with an application key scoped to deliveries | Provider uses an S3-compatible endpoint | [Batch voice generation and dubbing](../architectures/batch-voice-generation-and-dubbing/architecture.md) |
 
 ## Machine-readable source
 
