@@ -1,0 +1,19 @@
+{
+  "room_name": "${ROOM_NAME}",
+  "audio_only": true,
+  "audio_mixing": "DUAL_CHANNEL_AGENT",
+  "file_outputs": [
+    {
+      "file_type": "OGG",
+      "filepath": "sessions/{room_name}/{time}",
+      "s3": {
+        "access_key": "${B2_APPLICATION_KEY_ID}",
+        "secret": "${B2_APPLICATION_KEY}",
+        "region": "${B2_REGION}",
+        "endpoint": "https://s3.${B2_REGION}.backblazeb2.com",
+        "bucket": "${B2_INCOMING_BUCKET}",
+        "force_path_style": true
+      }
+    }
+  ]
+}

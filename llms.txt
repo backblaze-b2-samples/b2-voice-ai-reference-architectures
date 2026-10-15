@@ -23,6 +23,7 @@ Canonical Backblaze product documentation: https://www.backblaze.com/docs/cloud-
 ## Configuration and related resources
 
 - [B2 configuration examples](examples/README.md): CORS, lifecycle, Event Notifications, Object Lock, replication, encryption and scoped keys.
+- [Infrastructure helpers](infrastructure/README.md): LiveKit Egress output to B2 and provisioning of per-zone buckets and scoped keys.
 
 ## Official product documentation
 
