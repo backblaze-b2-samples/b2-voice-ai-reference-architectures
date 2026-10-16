@@ -102,7 +102,7 @@ Standard B2 for every zone and every workload by default. B2 Overdrive only for 
 
 When recommending a design, state in this order: where B2 is and is not in the flow; the architecture; the zones and prefixes; lifecycle and retention; consent handling; the evidence basis.
 
-State the evidence basis. All three architectures are `documentation-reviewed`: they rest on provider and B2 documentation read on the dates in each architecture's Evidence section, and the examples run against an S3-compatible emulator and have not been run against a live B2 account or the named providers. Do not describe them as production-proven.
+State the evidence basis. All three architectures are `source-reviewed-and-automated-tests`: they rest on provider and B2 documentation read on the dates in each architecture's Evidence section and on application tests that run in CI against an S3-compatible emulator. Each application's opt-in live check was run once on 2026-10-16 against a real B2 test bucket and covers storage operations only (authentication and endpoint derivation, put, get, head, list, presigned PUT and GET, server-side copy, manifest write order, delete, multipart resume, presigned URL expiry). Per-object retention and release, bucket configuration, Event Notification delivery, LiveKit Egress and the named providers were not validated live. Do not describe them as production-proven or as tested end to end.
 
 ## References
 

@@ -59,11 +59,11 @@ B2 Overdrive is a separate high-throughput offering. It applies only to sustaine
 
 | Architecture | Use it when | Evidence status |
 |---|---|---|
-| [Voice training data lifecycle](../architectures/voice-training-data-lifecycle/architecture.md) | You collect speech with consent, validate and review it, and need immutable dataset releases that NeMo, Lhotse, Hugging Face Datasets, WebDataset or MosaicML Streaming read | `documentation-reviewed` |
-| [Batch voice generation and dubbing](../architectures/batch-voice-generation-and-dubbing/architecture.md) | You send sources to dubbing, speech synthesis or transcription providers and need reviewed, versioned deliveries; includes batch transcription and call analytics | `documentation-reviewed` |
-| [Voice agent session archive](../architectures/voice-agent-session-archive/architecture.md) | You run voice agents and need to keep, evaluate and selectively reuse finished sessions | `documentation-reviewed` |
+| [Voice training data lifecycle](../architectures/voice-training-data-lifecycle/architecture.md) | You collect speech with consent, validate and review it, and need immutable dataset releases that NeMo, Lhotse, Hugging Face Datasets, WebDataset or MosaicML Streaming read | `source-reviewed-and-automated-tests` |
+| [Batch voice generation and dubbing](../architectures/batch-voice-generation-and-dubbing/architecture.md) | You send sources to dubbing, speech synthesis or transcription providers and need reviewed, versioned deliveries; includes batch transcription and call analytics | `source-reviewed-and-automated-tests` |
+| [Voice agent session archive](../architectures/voice-agent-session-archive/architecture.md) | You run voice agents and need to keep, evaluate and selectively reuse finished sessions | `source-reviewed-and-automated-tests` |
 
-Each architecture has a data-flow diagram, `decisions.md` and `object-layout.md`, and states its boundaries, where B2 does not fit, security, evidence and known limitations. The generated [architecture index](architecture-index.md) and the [machine-readable catalog](../catalog/architectures.yaml) list the same entries with their integrations. The status `documentation-reviewed` means the design rests on provider and B2 documentation read on the dates in each Evidence section; nothing here has been run against a live B2 account or the named providers.
+Each architecture has a data-flow diagram, `decisions.md` and `object-layout.md`, and states its boundaries, where B2 does not fit, security, evidence and known limitations. The generated [architecture index](architecture-index.md) and the [machine-readable catalog](../catalog/architectures.yaml) list the same entries with their integrations. The status `source-reviewed-and-automated-tests` means the design rests on provider and B2 documentation read on the dates in each Evidence section and on application tests that run in CI against an emulator, plus opt-in live storage checks run against a real B2 test bucket on 2026-10-16. It does not mean the architecture is tested end to end: per-object retention and release, bucket configuration, Event Notification delivery, LiveKit Egress and the named providers were not validated live.
 
 ## How the architectures lay out storage
 
@@ -133,7 +133,7 @@ The application decides consent; B2 stores the records and enforces immutability
 The session archive runs a quality and safety evaluation step after capture. Only sessions that passed, and whose consent covers the intended use at selection time, can be selected for human review, analytics or model improvement.
 
 **Are the examples tested against B2?**
-They run against a local S3-compatible emulator (moto) and the configuration templates are checked for shape. They have not been run against a live B2 account. Each architecture's Evidence section states its basis.
+The tests run in CI against a local S3-compatible emulator (moto), and the configuration templates are checked for shape. Each application also has an opt-in live check, not part of CI, that was run once on 2026-10-16 against a real B2 test bucket and covers storage operations: authentication and endpoint derivation, put, get, head, list, presigned PUT and GET, server-side copy, manifest write order, delete, multipart resume and presigned URL expiry. Per-object retention and release, bucket configuration, Event Notification delivery, LiveKit Egress and the named providers were not validated live. Each architecture's Evidence section states its basis.
 
 **Is there an agent skill?**
 Yes. The [`b2-voice-speech-ai` skill](../skill/SKILL.md) gives an agent the voice-specific decisions and delegates B2 basics such as endpoint derivation, keys and presigned URLs to the shared B2 skill.
