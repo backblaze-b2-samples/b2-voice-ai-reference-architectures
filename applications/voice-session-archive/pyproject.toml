@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voice-session-archive"
+version = "0.1.0"
+description = "Archive LiveKit Egress recordings on Backblaze B2 with a verified egress_ended webhook, a session manifest and a session evaluation"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = [
+    "boto3>=1.34,<2",
+    "jsonschema>=4.23,<5",
+    "python-dotenv>=1.0,<2",
+]
+
+[project.scripts]
+voice-session-archive = "voice_session_archive.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+voice_session_archive = ["schemas/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "live: runs against a real B2 bucket; needs RUN_B2_LIVE_TESTS=1 and the B2_* variables",
+]
+# The tests sign tokens with short, readable test secrets on purpose.
+filterwarnings = ["ignore:The HMAC key is:UserWarning"]
