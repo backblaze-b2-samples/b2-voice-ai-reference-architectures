@@ -14,32 +14,73 @@ Run dubbing, text-to-speech and transcription jobs in batches against hosted or 
 
 ## Data flow
 
+The flow is drawn in two parts that meet at the work bucket's `candidates/` prefix. Cylinders are B2 buckets (blue), green boxes are your own services, the orange box is the provider and purple boxes are people. Edge numbers match the steps listed below the diagrams.
+
+### Submit and collect (steps 1 to 7)
+
 ```mermaid
-flowchart LR
-  subgraph Submit
-    APP[Application] -->|1. upload source| SRC[(incoming bucket<br/>source/)]
-    SRC -->|2. signed Event Notification| HOOK[Webhook receiver]
-    HOOK -->|3. job, once per eventId| Q[External queue]
-    Q --> RUN[Job runner]
-    RUN -->|checks consent| PROT[(protected bucket<br/>consents/)]
-    RUN -->|4. presigned GET URL| PROV[Provider<br/>hosted or self-hosted]
-  end
-  subgraph Collect
-    PROV -->|5. callback or polled status| RUN
-    RUN -->|6. download outputs through the provider API| RUN
-    RUN -->|7. mix, stems, transcript, job manifest last| CAND[(work bucket<br/>candidates/)]
-  end
-  subgraph Review
-    CAND -->|8. presigned GET| REV[Review tool]
-    REV -->|9. approve or reject| RUN
-  end
-  subgraph Deliver
-    RUN -->|10. copy approved outputs, manifest with lineage last| DEL[(releases bucket<br/>deliveries/)]
-    DEL -->|11a. short-lived presigned GET| RCPT[Recipient]
-    DEL -->|11b. private CDN worker| CDN[CDN]
-  end
-  CAND -.->|12. lifecycle expires unpromoted candidates| X[deleted]
+flowchart TB
+  APP["Application"]
+  SRC[("incoming bucket<br/>source/")]
+  HOOK["Webhook receiver"]
+  Q["Queue outside B2"]
+  RUN["Job runner"]
+  PROT[("protected bucket<br/>consents/")]
+  PROV["Provider<br/>hosted or self-hosted"]
+  CAND[("work bucket<br/>candidates/")]
+
+  APP -->|"1. upload"| SRC
+  SRC -->|"2. signed event"| HOOK
+  HOOK -->|"2. job, once per eventId"| Q
+  Q --> RUN
+  PROT -->|"3. consent check"| RUN
+  RUN -->|"4. presigned GET URL"| PROV
+  PROV -->|"5. callback or poll"| RUN
+  PROV -->|"6. runner downloads outputs"| RUN
+  RUN -->|"7. outputs, then job manifest last"| CAND
+
+  classDef storage fill:#e8f1fb,stroke:#2f6db5,color:#0b2545
+  classDef compute fill:#eef7ee,stroke:#3a7d44,color:#123d1a
+  classDef external fill:#fdf2e3,stroke:#c07a12,color:#4a2c00
+  class SRC,PROT,CAND storage
+  class APP,HOOK,Q,RUN compute
+  class PROV external
 ```
+
+A hosted provider fetches the source from the incoming bucket with the URL from step 4 and never writes to B2. A self-hosted model or the placeholder worker instead reads the source and writes `candidates/` itself with its own scoped keys (see [Running the job and collecting outputs](#running-the-job-and-collecting-outputs)).
+
+### Review and deliver (steps 8 to 12)
+
+```mermaid
+flowchart TB
+  CAND[("work bucket<br/>candidates/")]
+  REV["Review tool<br/>and reviewers"]
+  RUN["Job runner"]
+  DEL[("releases bucket<br/>deliveries/")]
+  X["Deleted"]
+  CDN["CDN worker"]
+  RCPT["Recipient"]
+
+  CAND -->|"8. presigned GET"| REV
+  REV -->|"9. approve or reject"| RUN
+  RUN -->|"9. decision as new<br/>manifest version"| CAND
+  RUN -->|"10. copy approved outputs,<br/>manifest with lineage last"| DEL
+  CAND -.->|"12. lifecycle"| X
+  DEL -->|"11a. presigned GET"| RCPT
+  DEL -->|"11b. read-only key"| CDN
+  CDN --> RCPT
+
+  classDef storage fill:#e8f1fb,stroke:#2f6db5,color:#0b2545
+  classDef compute fill:#eef7ee,stroke:#3a7d44,color:#123d1a
+  classDef human fill:#f3eafb,stroke:#7a4fb0,color:#2e1450
+  classDef gone fill:#f4f4f4,stroke:#999,color:#555,stroke-dasharray:4 3
+  class CAND,DEL storage
+  class RUN,CDN compute
+  class REV,RCPT human
+  class X gone
+```
+
+### Steps
 
 1. The application uploads the source file (audio, video or a text script) to `source/` in the incoming bucket, with presigned PUT or multipart upload ([examples](../../examples/README.md#code-examples)). The object name carries a random id, never a speaker's name.
 2. The Event Notification rule on `source/` ([template](../../examples/event-notifications.json)) calls a webhook. The receiver verifies the `X-Bz-Event-Notification-Signature` header, records the `eventId`, answers, and puts a job on a queue outside B2.
@@ -52,7 +93,7 @@ flowchart LR
 9. The decision is recorded in the job manifest as a new object version (`review.status`, `review.decided_at`).
 10. For an approved job, the runner copies the approved outputs to `deliveries/<release>/<version>/` in the releases bucket and writes the job manifest with its `promotion` block, including lineage, last. A delivery version is never rewritten.
 11. Approved outputs reach recipients through short-lived presigned GET URLs or a CDN in front of the private bucket.
-12. Candidates that are rejected or never reviewed are removed by the work bucket's lifecycle rule.
+12. The work bucket's lifecycle rule removes every candidate after the example period; approved outputs survive as copies in `deliveries/`, so only rejected and never-reviewed outputs are lost.
 
 ## Pipeline stages
 

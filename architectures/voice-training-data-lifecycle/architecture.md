@@ -12,38 +12,75 @@ Collect speech recordings with consent, validate and normalize them, review tran
 
 ## Data flow
 
+The flow is shown in two parts that share the `candidates/` and `evaluations/` prefixes of the work bucket. Edge numbers match the numbered steps below. Cylinders are B2 bucket prefixes (blue), green boxes are components you run, amber boxes are third-party tools or infrastructure outside B2, and the purple box is the contributor's client. Dotted edges are reads that do not move the clip forward.
+
+**Capture and validate (steps 1 to 6)**
+
 ```mermaid
-flowchart LR
-  subgraph Capture
-    APP[Contributor app] -->|1. consent accepted| CS[Consent service]
-    CS -->|2. consent record| PROT[(protected bucket<br/>consents/)]
-    CS -->|3. presigned PUT URL| APP
-    APP -->|4. upload clip and sidecar| INC[(incoming bucket<br/>contributions/)]
-  end
-  subgraph Process
-    INC -->|5. signed Event Notification| HOOK[Webhook receiver]
-    HOOK -->|6. job, once per eventId| Q[External queue]
-    Q --> VAL[Validation and normalization worker]
-    VAL -->|reads consent| PROT
-    VAL -->|7. accepted clips and NeMo lines| CAND[(work bucket<br/>candidates/)]
-    VAL -->|rejects and reports| EVAL[(work bucket<br/>evaluations/)]
-  end
-  subgraph Review
-    CAND -->|8. presigned GET| LS[Label Studio]
-    LS -->|9. annotations| EVAL
-  end
-  subgraph Release
-    CAND --> BUILD[Release builder]
-    EVAL --> BUILD
-    BUILD -->|10. audio, NeMo manifest, Shar, WebDataset, MDS, release manifest last| REL[(releases bucket<br/>datasets/)]
-    REL -->|11. DVC remote| DVC[DVC in the training repository]
-  end
-  subgraph Train
-    REL -->|12. read-only key| CACHE[Local NVMe or cluster cache]
-    CACHE --> LOAD[Lhotse / HF Datasets / WebDataset / MosaicML Streaming / NeMo]
-    LOAD --> RUN[Training and evaluation job]
-    RUN -->|13. metrics, reports, model artifacts| EVAL
-  end
+flowchart TB
+  APP["Contributor app"]
+  CS["Consent service<br/>and upload signer"]
+  PROT[("protected bucket<br/>consents/")]
+  INC[("incoming bucket<br/>contributions/")]
+  HOOK["Webhook receiver"]
+  Q["Queue outside B2"]
+  VAL["Validation worker"]
+  CAND[("work bucket<br/>candidates/")]
+  EVAL[("work bucket<br/>evaluations/validation/")]
+
+  APP -->|"1 accepts terms"| CS
+  CS -->|"1 consent record"| PROT
+  CS -->|"2 presigned PUT URL"| APP
+  APP -->|"3 clip and sidecar"| INC
+  INC -->|"4 signed event"| HOOK
+  HOOK -->|"4 job, once per eventId"| Q
+  Q --> VAL
+  INC -.->|"5 reads clip"| VAL
+  PROT -.->|"5 checks consent"| VAL
+  VAL -->|"6 accepted clips, NeMo lines"| CAND
+  VAL -->|"6 rejects, report"| EVAL
+
+  classDef store fill:#dbeafe,stroke:#1d4ed8,color:#0b1b3a
+  classDef svc fill:#dcfce7,stroke:#15803d,color:#052e16
+  classDef ext fill:#fef3c7,stroke:#b45309,color:#3b2005
+  classDef person fill:#f3e8ff,stroke:#7e22ce,color:#2e1065
+  class PROT,INC,CAND,EVAL store
+  class CS,HOOK,VAL svc
+  class Q ext
+  class APP person
+```
+
+**Review, release and train (steps 7 to 9)**
+
+```mermaid
+flowchart TB
+  CAND[("work bucket<br/>candidates/")]
+  LS["Label Studio<br/>(reviewers)"]
+  EVAL[("work bucket<br/>evaluations/")]
+  PROT[("protected bucket<br/>consents/")]
+  BUILD["Release builder"]
+  REL[("releases bucket<br/>datasets/&lt;dataset&gt;/&lt;version&gt;/")]
+  DVC[("releases bucket<br/>datasets/dvc/")]
+  JOB["Training job<br/>local cache and loaders"]
+  MLF["MLflow tracking server"]
+
+  CAND -->|"7 presigned GET"| LS
+  LS -->|"7 annotations to review/"| EVAL
+  CAND -->|"8 accepted lines"| BUILD
+  EVAL -->|"8 annotations"| BUILD
+  PROT -.->|"8 rechecks consent"| BUILD
+  BUILD -->|"8 files, release-manifest.json last"| REL
+  REL -->|"9 read-only expiring key"| JOB
+  JOB -->|"9 metrics and artifacts"| MLF
+  MLF -->|"9 to mlflow/"| EVAL
+  DVC -.->|"DVC remote, pinned by Git"| JOB
+
+  classDef store fill:#dbeafe,stroke:#1d4ed8,color:#0b1b3a
+  classDef svc fill:#dcfce7,stroke:#15803d,color:#052e16
+  classDef ext fill:#fef3c7,stroke:#b45309,color:#3b2005
+  class CAND,EVAL,PROT,REL,DVC store
+  class BUILD,JOB svc
+  class LS,MLF ext
 ```
 
 1. The contributor accepts the recording and data-use terms. The consent service writes a consent record (schema: [`consent-record.schema.json`](../../schemas/consent-record.schema.json)) to the protected bucket before any upload URL exists.
@@ -196,7 +233,7 @@ Each clip carries its SHA-256 and consent id from validation onwards. Each relea
 | Contributor app | Presigned PUT for one object in `contributions/` |
 | Validation worker | Read `contributions/`, `consents/`; write `candidates/`, `evaluations/` |
 | Reviewers | Presigned GET through Label Studio; no B2 key |
-| Release builder | Read `candidates/`, `evaluations/`; write `datasets/` |
+| Release builder | Read `candidates/`, `evaluations/`, `consents/`; write `datasets/` |
 | Training jobs | Read-only, expiring key on `datasets/` |
 | Auditors | Read-only on `consents/`, including retention and legal hold |
 

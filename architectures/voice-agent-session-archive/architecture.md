@@ -14,36 +14,85 @@ B2 is never in the live audio path. The voice platform carries the conversation 
 
 ## Data flow
 
+The flow is drawn in two parts that meet at the protected bucket's `sessions/` prefix. The numbers on the arrows match the steps listed after the diagrams. Colours: blue cylinders are B2 buckets, purple cylinders are databases outside B2, green boxes are the operator's services, the grey dashed box is the external voice platform, and orange marks people.
+
+### Capture and evaluate (steps 1 to 6)
+
 ```mermaid
-flowchart LR
-  subgraph Live session
-    U[Caller] <-->|real-time audio| RT[Voice platform<br/>LiveKit, Pipecat, Twilio, Daily, Vapi]
-    RT <--> AG[Voice agent]
+flowchart TB
+  subgraph outside["Outside B2: the live call"]
+    PLAT["Voice platform (see table)<br/>caller and voice agent"]
   end
-  subgraph Capture
-    RT -->|1a. LiveKit Egress S3 output| INC[(incoming bucket<br/>sessions/)]
-    RT -->|1b. callback, download, upload| ADP[Session adapter]
-    ADP --> INC
-    ADP -->|2. session manifest last| INC
-  end
-  subgraph Evaluate
-    INC -->|3. signed Event Notification| HOOK[Webhook receiver]
-    HOOK -->|once per eventId| Q[External queue]
-    Q --> EV[Session evaluator]
-    EV -->|4. checks consent| CONS[(protected bucket<br/>consents/)]
-    EV -->|5. results| EVR[(work bucket<br/>evaluations/)]
-  end
-  subgraph Archive
-    EV -->|6. copy by retention class, evaluated manifest last| PROT[(protected bucket<br/>sessions/)]
-  end
-  subgraph Select
-    PROT -->|7. passed and consented only| SEL[Selection job]
-    SEL -->|8a. short-lived presigned GET| REV[Reviewers]
-    SEL -->|8b. transcripts and events| WH[Analytics database]
-    SEL -->|8c. dataset release| DS[(releases bucket<br/>datasets/)]
-  end
-  INC -.->|lifecycle expires incoming copies| X[deleted]
+  CAP["Capture service<br/>adapter or egress_ended handler"]
+  INC[("incoming bucket<br/>sessions/")]
+  HOOK["Webhook receiver<br/>no B2 key"]
+  Q["Queue<br/>outside B2"]
+  EV["Session evaluator"]
+  CONS[("protected bucket<br/>consents/")]
+  EVR[("work bucket<br/>evaluations/")]
+  PROT[("protected bucket<br/>sessions/")]
+  X["Deleted by lifecycle"]
+
+  PLAT -->|"1a. LiveKit Egress<br/>S3 output"| INC
+  PLAT -->|"egress_ended or callback;<br/>1b. download"| CAP
+  CAP -->|"1b. upload<br/>2. session manifest last"| INC
+  INC -->|"3. signed Event Notification"| HOOK
+  HOOK -->|"manifest only,<br/>once per eventId"| Q
+  Q --> EV
+  INC -->|"4. manifest and recordings"| EV
+  CONS -->|"4. consent records"| EV
+  EV -->|"5. results"| EVR
+  EV -->|"6. copy if class is not short,<br/>retention set, manifest last"| PROT
+  INC -.->|"lifecycle expiry"| X
+
+  classDef bucket fill:#dbeafe,stroke:#1d4ed8,color:#0b1b3a
+  classDef service fill:#dcfce7,stroke:#15803d,color:#052e16
+  classDef external fill:#f3f4f6,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
+  classDef gone fill:#fee2e2,stroke:#b91c1c,color:#450a0a
+  class INC,CONS,EVR,PROT bucket
+  class CAP,HOOK,Q,EV service
+  class PLAT external
+  class X gone
 ```
+
+| Voice platform | Path to the incoming bucket |
+|---|---|
+| LiveKit | 1a. Egress writes the recording through B2's S3-compatible endpoint; the `egress_ended` handler writes the manifest |
+| Pipecat, Twilio, Daily, Vapi | 1b. A session adapter downloads (or, for Pipecat, receives) the recording, uploads it and writes the manifest |
+
+### Select and retrieve (steps 7 and 8)
+
+```mermaid
+flowchart TB
+  PROT[("protected bucket<br/>sessions/")]
+  CONS[("protected bucket<br/>consents/")]
+  DB[("Application database<br/>session index")]
+  SEL["Selection job"]
+  APP["Retrieval application<br/>authorizes, logs access"]
+  REV(["Reviewers and support"])
+  WH[("Analytics database")]
+  DS[("releases bucket<br/>datasets/")]
+
+  PROT -->|"7. evaluated manifests"| DB
+  DB -->|"7. passed, eligible_for<br/>names the use"| SEL
+  CONS -->|"7. consent re-read"| SEL
+  PROT -->|"selected files"| SEL
+  SEL -->|"8a. sessions to review"| APP
+  APP -->|"8a. short-lived presigned<br/>GET on protected sessions/"| REV
+  SEL -->|"8b. transcripts and events"| WH
+  SEL -->|"8c. versioned release,<br/>release manifest last"| DS
+
+  classDef bucket fill:#dbeafe,stroke:#1d4ed8,color:#0b1b3a
+  classDef service fill:#dcfce7,stroke:#15803d,color:#052e16
+  classDef store fill:#ede9fe,stroke:#6d28d9,color:#1e1b4b
+  classDef human fill:#ffedd5,stroke:#c2410c,color:#431407
+  class PROT,CONS,DS bucket
+  class SEL,APP service
+  class DB,WH store
+  class REV human
+```
+
+### Steps
 
 1. While the session runs, the platform carries the audio. When recording is enabled, the recording reaches the incoming bucket's `sessions/<session_id>/` prefix by one of two paths: LiveKit Egress writes it directly through B2's S3-compatible endpoint (1a), or a session adapter receives the platform's completion callback, downloads the recording from the platform and uploads it to B2 (1b).
 2. When the session has ended and every file is in place, the adapter (or, for Egress, the handler of the `egress_ended` webhook) writes `sessions/<session_id>/session-manifest.json` last, with `evaluation.status` set to `pending` and an empty `eligible_for`.
@@ -214,7 +263,7 @@ One bucket per zone, because lifecycle, Object Lock, replication, encryption def
 
 ## Security
 
-- **Keys.** One application key per component and prefix: LiveKit Egress and the adapters write `sessions/` in the incoming bucket only; the evaluator reads incoming `sessions/` and protected `consents/`, writes `evaluations/` and `scratch/`, and writes protected `sessions/` through separate keys; the selection job reads protected `sessions/` and writes `datasets/`. No key is given to a platform other than the Egress key, which is limited to incoming `sessions/`. No application key has `deleteFiles`, `bypassGovernance` or `writeKeys` unless its job requires it. See the [scoped key examples](../../examples/README.md#scoped-application-keys).
+- **Keys.** One application key per component and prefix: LiveKit Egress and the adapters write `sessions/` in the incoming bucket only; the evaluator reads incoming `sessions/` and protected `consents/`, writes `evaluations/` and `scratch/`, and writes protected `sessions/` through separate keys; the selection job reads protected `sessions/` and `consents/` and writes `datasets/`. No key is given to a platform other than the Egress key, which is limited to incoming `sessions/`. No application key has `deleteFiles`, `bypassGovernance` or `writeKeys` unless its job requires it. See the [scoped key examples](../../examples/README.md#scoped-application-keys).
 - **Platform credentials.** Twilio, Daily and Vapi API keys live in the adapter's secret store; download links they return are bearer credentials, fetched server-side, never logged and never stored.
 - **Webhooks.** Verify the B2 Event Notification signature on the raw body ([`notifications.py`](../../examples/python/notifications.py)), the LiveKit webhook JWT, the `X-Twilio-Signature` header and the Daily `X-Webhook-Signature` before acting. Process each event once.
 - **Presigned URLs.** One URL per file and per access, short-lived, issued after the application authorizes the person; do not log them or store them in a manifest.

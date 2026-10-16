@@ -104,6 +104,7 @@ consents/
 | Label Studio target | work, `evaluations/review/` | `listFiles`, `writeFiles` |
 | MLflow server | work, `evaluations/mlflow/` | `listFiles`, `readFiles`, `writeFiles` |
 | Release builder | work, `candidates/` and `evaluations/` (two keys) | `listFiles`, `readFiles` |
+| Release builder | protected, `consents/` | `listFiles`, `readFiles` |
 | Release builder | releases, `datasets/` | `listFiles`, `readFiles`, `writeFiles` |
 | Training job | releases, `datasets/` | `listFiles`, `readFiles`, with an expiry |
 | DVC users | releases, `datasets/dvc/` | `listFiles`, `readFiles`, plus `writeFiles` for whoever pushes |
