@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voice-generation-artifacts"
+version = "0.1.0"
+description = "Candidates, per-speaker stems, promotion by copy with lineage and delivery manifests for batch voice generation on Backblaze B2, with a placeholder worker"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = [
+    "boto3>=1.34,<2",
+    "jsonschema>=4.23,<5",
+    "python-dotenv>=1.0,<2",
+]
+
+[project.scripts]
+voice-generation-artifacts = "voice_generation_artifacts.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+voice_generation_artifacts = ["schemas/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "live: runs against a real B2 bucket; needs RUN_B2_LIVE_TESTS=1 and the B2_* variables",
+]

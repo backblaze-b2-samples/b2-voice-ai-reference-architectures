@@ -1,0 +1,20 @@
+[
+  {
+    "fileNamePrefix": "work/candidates/",
+    "daysFromUploadingToHiding": 14,
+    "daysFromHidingToDeleting": 1,
+    "daysFromStartingToCancelingUnfinishedLargeFiles": null
+  },
+  {
+    "fileNamePrefix": "releases/delivery-manifests/",
+    "daysFromUploadingToHiding": 8,
+    "daysFromHidingToDeleting": 1,
+    "daysFromStartingToCancelingUnfinishedLargeFiles": null
+  },
+  {
+    "fileNamePrefix": "",
+    "daysFromUploadingToHiding": null,
+    "daysFromHidingToDeleting": null,
+    "daysFromStartingToCancelingUnfinishedLargeFiles": 1
+  }
+]

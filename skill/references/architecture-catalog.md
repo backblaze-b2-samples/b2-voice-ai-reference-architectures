@@ -37,7 +37,7 @@ Send sources to dubbing, speech synthesis and transcription providers through pr
 
 **Security:** One presigned GET URL per job and object version, signed just before submission; hosted providers never receive a key; Presigned URL lifetime longer than the provider's download window and recorded in the job manifest, never the URL itself; Provider callbacks verified by signature or configured credentials and handled idempotently; One application key per component and prefix; delivery keys read-only and scoped to deliveries; SSE-B2 default encryption; object names and metadata carry job ids and pseudonymous speaker ids only.
 
-**Evidence basis:** Provider behavior checked against ElevenLabs, Deepgram and AssemblyAI documentation on 2026-10-15; B2 behavior checked against the Backblaze documentation linked from the capability map; Generation job manifest example validated against its schema in CI.
+**Evidence basis:** Provider behavior checked against ElevenLabs, Deepgram and AssemblyAI documentation on 2026-10-15; B2 behavior checked against the Backblaze documentation linked from the capability map; Generation job manifest example validated against its schema in CI; Application tests run in CI against an emulated S3 server, not against a B2 account or the providers.
 
 ## Voice agent session archive
 

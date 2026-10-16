@@ -1,0 +1,7 @@
+.env
+*.egg-info/
+.venv/
+__pycache__/
+.pytest_cache/
+.voice-generation-artifacts/
+demo/

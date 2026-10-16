@@ -9,6 +9,7 @@ The [architectures](../docs/architecture-index.md) are complete without an appli
 | Application | Architecture | Run it |
 |---|---|---|
 | [`voice-dataset-ingest`](voice-dataset-ingest/README.md) | `voice-training-data-lifecycle` | `cd applications/voice-dataset-ingest && pip install -r requirements-dev.txt -e . && python -m pytest -q` |
+| [`voice-generation-artifacts`](voice-generation-artifacts/README.md) | `batch-voice-generation-and-dubbing` | `cd applications/voice-generation-artifacts && pip install -r requirements-dev.txt -e . && python -m pytest -q` |
 
 Each application gets a section on this page, a row in the matrix of the `applications` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), and a `links.application` field in its catalog entry that points to its README.
 
@@ -42,6 +43,37 @@ It starts with synthetic data generated from a fixed seed. See the [application 
 ### Known limitations
 
 The tests run against an emulated S3 server, not a B2 account. The tool uses one bucket with zone prefixes (production uses one bucket per zone), covers a single organization with no per-tenant isolation, normalizes audio with a simple standard-library resampler, has no HTTP receiver or queue, and cannot withdraw a published version, because that needs a key with `bypassGovernance` that it never uses. The synthetic clips are tones, not speech.
+
+## voice-generation-artifacts
+
+### What it shows
+
+The artifact side of batch voice generation. A worker receives a presigned GET URL for the source, never a key; every output is kept as an expiring candidate, with one stem per speaker and a mix per language; a reviewed attempt is promoted to a published version by server-side copy, with lineage from the delivered object back to the source version, the candidate, the SHA-256 values and the worker; and a delivery manifest carries presigned GET URLs with a default lifetime of 3600 seconds. The tool has four commands: `synth-source`, `submit`, `promote` and `deliver`. The audio is synthetic placeholder audio: the only worker uses no model, no network service and no provider key, and writes audible tones, not speech. It adds no voice model and no provider adapter.
+
+### Architecture
+
+[`batch-voice-generation-and-dubbing`](../architectures/batch-voice-generation-and-dubbing/architecture.md)
+
+### Configurations it ships
+
+None applied. The application never creates or configures a bucket, and a test proves that its workflow sends no such request. It ships [`lifecycle-single-bucket.json`](voice-generation-artifacts/lifecycle-single-bucket.json), candidate expiry with this tool's single-bucket prefixes, and a command to apply it; applying a lifecycle template replaces all of a bucket's existing lifecycle rules. It also uses the templates in [`examples/`](../examples/README.md).
+
+### How to run
+
+Prerequisites: Python 3.10 or later; for a real bucket, a private bucket and an application key limited to it. Environment variables: `B2_APPLICATION_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME` and `B2_REGION`; the endpoint is derived from `B2_REGION`. The command reads `.env` from the current directory only.
+
+```bash
+cd applications/voice-generation-artifacts
+pip install -r requirements-dev.txt -e .
+python -m pytest -q                                   # emulated S3, no B2 account, no credentials
+voice-generation-artifacts synth-source --out ./demo  # deterministic synthetic source recording
+```
+
+It starts with a source generated from a fixed seed. See the [application README](voice-generation-artifacts/README.md) for the walkthrough, the key capabilities each command needs and the exit codes.
+
+### Known limitations
+
+The audio is synthetic placeholder audio, tones rather than speech, and nothing is dubbed or synthesized. The tests run against an emulated S3 server, not a B2 account. The tool uses one bucket with zone prefixes (production uses one bucket per zone), covers a single organization with no per-tenant isolation, has no review step, consent service or queue, and cannot remove a published version. A delivery manifest is a bearer credential until its URLs expire.
 
 ## How each entry is described
 

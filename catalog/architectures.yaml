@@ -225,15 +225,17 @@ architectures:
       profile: From a few jobs a day to continuous batches of dubbing and transcription
       notes: Throughput is bound by the providers' job limits and the runner's concurrency, not by B2. Each output is stored at least twice while a candidate and its delivery coexist; candidate lifecycle bounds that overlap.
     validation:
-      status: documentation-reviewed
+      status: source-reviewed-and-automated-tests
       date: "2026-10-15"
       methods:
         - Provider behavior checked against ElevenLabs, Deepgram and AssemblyAI documentation on 2026-10-15
         - B2 behavior checked against the Backblaze documentation linked from the capability map
         - Generation job manifest example validated against its schema in CI
+        - Application tests run in CI against an emulated S3 server, not against a B2 account or the providers
       evidence:
         - architectures/batch-voice-generation-and-dubbing/architecture.md
         - docs/b2-capabilities.md
+        - applications/voice-generation-artifacts/tests/
         - https://elevenlabs.io/docs/api-reference/dubbing/create-project
         - https://elevenlabs.io/docs/api-reference/dubbing/language-targets/get-language-target
         - https://elevenlabs.io/docs/eleven-api/resources/webhooks
@@ -256,7 +258,7 @@ architectures:
       - Lineage from delivered file to source version, job and consent ids
     links:
       architecture: architectures/batch-voice-generation-and-dubbing/architecture.md
-      application: null
+      application: applications/voice-generation-artifacts/README.md
       deployment: infrastructure/b2-provisioning/README.md
       sample_data: testdata/synthetic-speech/README.md
       release_contract: schemas/generation-job-manifest.schema.json
