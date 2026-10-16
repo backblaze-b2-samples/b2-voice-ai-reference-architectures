@@ -165,7 +165,7 @@ python -m pytest -q
 - The tests start a moto server on `127.0.0.1` and use the fake credential `testing`. They need no network beyond the loopback interface, no B2 account and no LiveKit server.
 - Webhook tokens are signed at run time with PyJWT (a development dependency), an implementation independent of the receiver's own verifier, using readable test secrets. No token is stored in the repository.
 - Test data comes from `src/voice_session_archive/synth.py` with a fixed seed. No test reads or writes `testdata/synthetic-speech/`.
-- `tests/test_live.py` is skipped unless `RUN_B2_LIVE_TESTS=1` and the `B2_*` variables are set. It writes, reads and deletes a recording and a session manifest under `live-test/<uuid>/` (its key needs `deleteFiles` for that run).
+- `tests/test_live.py` is skipped unless `RUN_B2_LIVE_TESTS=1` and the `B2_*` variables are set, and is not run in CI. It writes, reads and deletes a recording and a session manifest under `live-test/<uuid>/` (its key needs `deleteFiles` for that run).
 - What the tests cover: the manifest written last and valid against its schema; rejection of a wrong secret, a wrong issuer, a changed body, an expired token, `alg` `none` and other algorithms, a token without `exp`, a missing `Authorization`, a body over 1 MiB and a recording key outside the prefix, each without a call to B2; one processing per event id; ignored events and failed Egress results; a missing recording or a size mismatch without a manifest; the Egress request with the region's endpoint, path style and no secret; the loopback receiver; the evaluation; that no request configures a bucket; and where the env file is read from.
 
 ## Known limitations
