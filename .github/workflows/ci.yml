@@ -39,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [voice-dataset-ingest]
+        app: [voice-dataset-ingest, voice-generation-artifacts]
     defaults:
       run:
         working-directory: applications/${{ matrix.app }}
