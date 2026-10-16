@@ -1,0 +1,6 @@
+.env
+*.egg-info/
+.venv/
+__pycache__/
+.pytest_cache/
+.voice-dataset-ingest/

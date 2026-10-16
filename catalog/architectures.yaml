@@ -108,15 +108,17 @@ architectures:
       profile: From thousands of clips to multi-terabyte speech corpora
       notes: Collection and review run at any scale on standard B2. Training reads go through a local cache; B2 Overdrive applies only when sustained aggregate read throughput is the measured constraint.
     validation:
-      status: documentation-reviewed
+      status: source-reviewed-and-automated-tests
       date: "2026-10-15"
       methods:
         - Third-party behavior checked against each tool's official documentation or source code on 2026-10-15
         - B2 behavior checked against the Backblaze documentation linked from the capability map
         - Release manifest example validated against its schema and recomputed from the synthetic fixtures in CI
+        - Application tests run in CI against an emulated S3 server, not against a B2 account or the named tools
       evidence:
         - architectures/voice-training-data-lifecycle/architecture.md
         - docs/b2-capabilities.md
+        - applications/voice-dataset-ingest/tests/
         - https://docs.nvidia.com/nemo-framework/user-guide/latest/nemotoolkit/asr/datasets.html
         - https://github.com/lhotse-speech/lhotse/blob/master/lhotse/cut/set.py
         - https://github.com/webdataset/webdataset
@@ -139,7 +141,7 @@ architectures:
       - Provenance from clip hash and consent id to release fingerprint and training run
     links:
       architecture: architectures/voice-training-data-lifecycle/architecture.md
-      application: null
+      application: applications/voice-dataset-ingest/README.md
       deployment: infrastructure/b2-provisioning/README.md
       sample_data: testdata/synthetic-speech/README.md
       release_contract: schemas/release-manifest.schema.json

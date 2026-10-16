@@ -33,3 +33,21 @@ jobs:
           fi
       - name: JSON files are valid
         run: git ls-files '*.json' | xargs -r -n1 python -m json.tool > /dev/null
+  applications:
+    name: Application ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [voice-dataset-ingest]
+    defaults:
+      run:
+        working-directory: applications/${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Install
+        run: "pip install --only-binary :all: -r requirements-dev.txt -e ."
+      - name: Tests
+        run: python -m pytest -q -p no:cacheprovider

@@ -31,7 +31,7 @@ Then pick the architecture that matches your workflow below and read its `archit
 <!-- catalog:architectures:start -->
 | Architecture | Purpose | Resources |
 |---|---|---|
-| [Voice training data lifecycle](architectures/voice-training-data-lifecycle/architecture.md) | Collect speech with consent, validate and review it, and publish immutable dataset releases that NeMo, Lhotse, Hugging Face Datasets, WebDataset and MosaicML Streaming read from B2. | [deployment](infrastructure/b2-provisioning/README.md) |
+| [Voice training data lifecycle](architectures/voice-training-data-lifecycle/architecture.md) | Collect speech with consent, validate and review it, and publish immutable dataset releases that NeMo, Lhotse, Hugging Face Datasets, WebDataset and MosaicML Streaming read from B2. | [application](applications/voice-dataset-ingest/README.md) / [deployment](infrastructure/b2-provisioning/README.md) |
 | [Batch voice generation and dubbing](architectures/batch-voice-generation-and-dubbing/architecture.md) | Send sources to dubbing, speech synthesis and transcription providers through presigned GET URLs, keep every output as an expiring candidate, and promote reviewed outputs to immutable deliveries with lineage. | [deployment](infrastructure/b2-provisioning/README.md) |
 | [Voice agent session archive](architectures/voice-agent-session-archive/architecture.md) | Archive finished voice agent sessions from LiveKit Egress or a session adapter, evaluate each session for quality and safety, retain it per class under Object Lock, and select only passed, consented sessions for review, analytics or datasets. | [deployment](infrastructure/livekit-egress/README.md) |
 <!-- catalog:architectures:end -->
@@ -186,7 +186,7 @@ The tests, validators and generators create nothing in B2. Only the commands you
 | [Configuration templates](examples/README.md) | The four buckets named by `B2_INCOMING_BUCKET`, `B2_WORK_BUCKET`, `B2_RELEASES_BUCKET` and `B2_PROTECTED_BUCKET`, if you create them from there | `contributions-uploader`, `contributions-reader`, `candidates-writer`, `training-reader`, `consent-auditor` | Lifecycle rules from `lifecycle-*.json`; notification rules `validate-contributions`, `evaluate-sessions` and `review-generation-sources`; S3 CORS rules; Object Lock default retention; replication rule `releases-second-region` with its destination bucket and replication keys |
 | [LiveKit Egress template](infrastructure/livekit-egress/README.md) | None | None; it uses the `voice-sessions-incoming-sessions` key | Recordings under `sessions/` in the incoming bucket |
 
-Each application lists the objects it writes in its README; applications create no bucket, key or rule.
+Each application lists the objects it writes in its README; applications create no bucket, key or rule. The objects of a version published by `voice-dataset-ingest` carry retention and cannot be deleted until it expires, so use a short retention period when you try it.
 
 To remove everything the provisioning helper created, print the clean up commands, review them, and run them yourself. The script never runs them:
 
