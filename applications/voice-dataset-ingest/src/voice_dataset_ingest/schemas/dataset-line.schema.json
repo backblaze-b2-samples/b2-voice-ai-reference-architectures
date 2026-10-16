@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:backblaze:b2-voice-ai-reference-architectures:dataset-line:1",
+  "title": "Voice dataset manifest line",
+  "description": "One line of a NeMo-style JSONL manifest for speech data. audio_filepath, duration and text are the fields NeMo speech recipes read; the other fields carry speaker, split, integrity and consent references.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "audio_filepath",
+    "duration",
+    "text"
+  ],
+  "properties": {
+    "audio_filepath": {
+      "type": "string",
+      "pattern": "^(?!.*\\.\\.)(?!/)[A-Za-z0-9_./=-]+$",
+      "description": "Path of the audio file, relative to the dataset root or an object key relative to the release prefix."
+    },
+    "duration": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Audio duration in seconds. It must match the duration in the audio header."
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Reference transcript."
+    },
+    "speaker": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "description": "Pseudonymous speaker id. It never carries a name."
+    },
+    "lang": {
+      "type": "string",
+      "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]+)*$",
+      "description": "BCP 47 language tag."
+    },
+    "sample_rate": {
+      "type": "integer",
+      "minimum": 8000
+    },
+    "split": {
+      "enum": [
+        "train",
+        "dev",
+        "test"
+      ]
+    },
+    "consent_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "description": "Id of the consent and license record that covers this clip."
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 of the audio file."
+    }
+  }
+}

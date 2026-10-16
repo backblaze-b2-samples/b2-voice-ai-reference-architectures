@@ -2,7 +2,7 @@
 
 Collect speech recordings with consent, validate and normalize them, review transcripts, and publish versioned, immutable dataset releases that training jobs read with NeMo, Lhotse, Hugging Face Datasets, WebDataset or MosaicML Streaming.
 
-**Validation status:** `documentation-reviewed`. Every third-party behavior on this page comes from the provider's own documentation or source code, read on the dates in [Evidence](#evidence). The release manifest example and its fixture tests run in CI, but no part of this workflow has been run against a live B2 account or against the named tools. See [Known limitations](#known-limitations).
+**Validation status:** `source-reviewed-and-automated-tests`. Every third-party behavior on this page comes from the provider's own documentation or source code, read on the dates in [Evidence](#evidence). The ingest, validation, manifest and release steps are implemented by the [`voice-dataset-ingest`](../../applications/voice-dataset-ingest/README.md) application, and its tests run in CI against an emulated S3 server, not against a B2 account or the named tools. The release manifest example and its fixture tests also run in CI. See [Known limitations](#known-limitations).
 
 ## When to use it
 
@@ -217,11 +217,13 @@ All entries were read on the date shown. Product behavior can change; the linked
 | 2026-10-15 | [AWS SDK service-specific endpoints](https://docs.aws.amazon.com/sdkref/latest/guide/feature-ss-endpoints.html), [AWS CLI with B2](https://www.backblaze.com/docs/cloud-storage-use-the-aws-cli-with-backblaze-b2) | `AWS_ENDPOINT_URL_S3` and `--endpoint-url` |
 | 2026-10-15 | [B2 Overdrive](https://www.backblaze.com/cloud-storage/b2-overdrive) | Separate high-throughput offering for sustained reads, enabled by Backblaze under a storage commitment |
 | 2026-10-15 | [B2 capability map](../../docs/b2-capabilities.md) and the Backblaze pages it links | Event Notifications, application keys, lifecycle rules, Object Lock, encryption, CORS, replication |
+| 2026-10-15 | [B2 application keys](https://www.backblaze.com/docs/cloud-storage-application-keys) | Capability names for retention: `readFileRetentions`, `writeFileRetentions`, `readBucketRetentions`, `writeBucketRetentions`, `bypassGovernance` |
+| 2026-10-15 | [`applications/voice-dataset-ingest/tests/`](../../applications/voice-dataset-ingest/tests) | Consent gate, signed and repeated events, validation, manifest order and per-object retention behave as described, against an emulated S3 server |
 
 ## Known limitations
 
 - Per-tenant isolation is not covered. The layout assumes a single organization; separate tenants need their own buckets and keys.
-- No component of this workflow has been run against a live B2 account, Label Studio, MLflow, DVC or the dataset libraries. The configuration shown is taken from each tool's documentation.
-- The repository has no release builder, validation worker or consent service; it provides the schemas, the release manifest example, the fixtures and the audio checks those components would use.
+- No component of this workflow has been run against a live B2 account, Label Studio, MLflow, DVC or the dataset libraries. The configuration shown is taken from each tool's documentation. The application's tests run against an emulated S3 server.
+- The [`voice-dataset-ingest`](../../applications/voice-dataset-ingest/README.md) application covers consent-gated upload, signed events, validation, normalization, the NeMo manifest and a release with per-object Object Lock retention, in a single bucket with zone prefixes. It has no consent service, no review step, no Lhotse, WebDataset or MDS shard builder and no HTTP receiver; the repository also provides the schemas, the release manifest example, the fixtures and the audio checks.
 - Removing a withdrawn speaker from models already trained is outside storage and is not covered.
 - PII redaction of transcripts is named as a step; no redaction model or rule set is provided.

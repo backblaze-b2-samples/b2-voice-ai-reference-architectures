@@ -6,7 +6,42 @@ The [architectures](../docs/architecture-index.md) are complete without an appli
 
 ## Applications
 
-No application is published in this folder yet. When one is added, it gets a section on this page, a row in the matrix of the `applications` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), and a `links.application` field in its catalog entry that points to its README.
+| Application | Architecture | Run it |
+|---|---|---|
+| [`voice-dataset-ingest`](voice-dataset-ingest/README.md) | `voice-training-data-lifecycle` | `cd applications/voice-dataset-ingest && pip install -r requirements-dev.txt -e . && python -m pytest -q` |
+
+Each application gets a section on this page, a row in the matrix of the `applications` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), and a `links.application` field in its catalog entry that points to its README.
+
+## voice-dataset-ingest
+
+### What it shows
+
+Consent-gated ingest of speech clips. A clip is accepted only under an active consent that permits training; it is uploaded with a presigned PUT URL or resumable multipart upload; a signed Event Notification is verified and each `eventId` processed once; the clip is validated and normalized to 16 kHz mono 16-bit PCM; the NeMo manifest is written last; and a published dataset version is protected with per-object Object Lock retention, on a bucket that already has Object Lock enabled. The tool has six commands: `synth`, `presign-upload`, `upload`, `handle-event`, `process` and `release`.
+
+### Architecture
+
+[`voice-training-data-lifecycle`](../architectures/voice-training-data-lifecycle/architecture.md)
+
+### Configurations it ships
+
+None applied. The application never creates or configures a bucket, and a test proves that its workflow sends no such request. It uses the templates in [`examples/`](../examples/README.md): Event Notifications, Object Lock, lifecycle rules and CORS. Applying a lifecycle template replaces all of a bucket's existing lifecycle rules.
+
+### How to run
+
+Prerequisites: Python 3.10 or later; for a real bucket, a private bucket created with Object Lock enabled and an application key limited to it. Environment variables: `B2_APPLICATION_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME`, `B2_REGION`, and `B2_EVENT_SIGNING_SECRET` for `handle-event`; the endpoint is derived from `B2_REGION`. The command reads `.env` from the current directory only.
+
+```bash
+cd applications/voice-dataset-ingest
+pip install -r requirements-dev.txt -e .
+python -m pytest -q                      # emulated S3, no B2 account, no credentials
+voice-dataset-ingest synth --out ./demo  # deterministic synthetic clips and consent records
+```
+
+It starts with synthetic data generated from a fixed seed. See the [application README](voice-dataset-ingest/README.md) for the walkthrough, the key capabilities each command needs and the exit codes.
+
+### Known limitations
+
+The tests run against an emulated S3 server, not a B2 account. The tool uses one bucket with zone prefixes (production uses one bucket per zone), covers a single organization with no per-tenant isolation, normalizes audio with a simple standard-library resampler, has no HTTP receiver or queue, and cannot withdraw a published version, because that needs a key with `bypassGovernance` that it never uses. The synthetic clips are tones, not speech.
 
 ## How each entry is described
 

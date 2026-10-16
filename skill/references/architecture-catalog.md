@@ -19,7 +19,7 @@ Collect speech with consent, validate and review it, and publish immutable datas
 
 **Security:** One application key per component and prefix, read-only and expiring for training jobs; Presigned PUT URLs for one object with a short expiry; Webhook signature verified on the raw body and each eventId processed once; SSE-B2 default encryption; object names and metadata carry pseudonymous ids only; CORS limited to the contributor app and Label Studio origins.
 
-**Evidence basis:** Third-party behavior checked against each tool's official documentation or source code on 2026-10-15; B2 behavior checked against the Backblaze documentation linked from the capability map; Release manifest example validated against its schema and recomputed from the synthetic fixtures in CI.
+**Evidence basis:** Third-party behavior checked against each tool's official documentation or source code on 2026-10-15; B2 behavior checked against the Backblaze documentation linked from the capability map; Release manifest example validated against its schema and recomputed from the synthetic fixtures in CI; Application tests run in CI against an emulated S3 server, not against a B2 account or the named tools.
 
 ## Batch voice generation and dubbing
 
