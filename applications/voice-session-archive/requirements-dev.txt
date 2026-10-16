@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest>=8,<9
+moto[server]>=5,<6
+PyJWT>=2.8,<3

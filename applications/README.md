@@ -10,6 +10,7 @@ The [architectures](../docs/architecture-index.md) are complete without an appli
 |---|---|---|
 | [`voice-dataset-ingest`](voice-dataset-ingest/README.md) | `voice-training-data-lifecycle` | `cd applications/voice-dataset-ingest && pip install -r requirements-dev.txt -e . && python -m pytest -q` |
 | [`voice-generation-artifacts`](voice-generation-artifacts/README.md) | `batch-voice-generation-and-dubbing` | `cd applications/voice-generation-artifacts && pip install -r requirements-dev.txt -e . && python -m pytest -q` |
+| [`voice-session-archive`](voice-session-archive/README.md) | `voice-agent-session-archive` | `cd applications/voice-session-archive && pip install -r requirements-dev.txt -e . && python -m pytest -q` |
 
 Each application gets a section on this page, a row in the matrix of the `applications` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), and a `links.application` field in its catalog entry that points to its README.
 
@@ -74,6 +75,37 @@ It starts with a source generated from a fixed seed. See the [application README
 ### Known limitations
 
 The audio is synthetic placeholder audio, tones rather than speech, and nothing is dubbed or synthesized. The tests run against an emulated S3 server, not a B2 account. The tool uses one bucket with zone prefixes (production uses one bucket per zone), covers a single organization with no per-tenant isolation, has no review step, consent service or queue, and cannot remove a published version. A delivery manifest is a bearer credential until its URLs expire.
+
+## voice-session-archive
+
+### What it shows
+
+Archiving a LiveKit voice session. LiveKit Egress writes the recording directly to B2 through the S3-compatible endpoint, with its own key that has only `writeFiles` and is limited to `incoming/sessions/`; the application receives the `egress_ended` webhook, verifies its signed token on the raw body (HS256 only, `exp` required, issuer and body hash checked) before any call to B2, processes each event id only once, confirms with a HEAD request that the recording is in the bucket with the reported size, and writes the session manifest last with the evaluation `pending`. An evaluation step then checks integrity, duration and consent and records which uses the session may be selected for. The tool has six commands: `synth`, `register-session`, `egress-request`, `handle-webhook`, `serve` (an HTTP receiver on `127.0.0.1` with a 1 MiB body limit) and `evaluate`.
+
+### Architecture
+
+[`voice-agent-session-archive`](../architectures/voice-agent-session-archive/architecture.md)
+
+### Configurations it ships
+
+None applied. The application never creates or configures a bucket, and a test proves that its workflow sends no such request. It ships the LiveKit Egress output as the `egress-request` command, which always prints placeholders instead of credentials, next to the [LiveKit Egress template](../infrastructure/livekit-egress/README.md). The lifecycle, Object Lock and Event Notification templates are in [`examples/`](../examples/README.md); applying a lifecycle template replaces all of a bucket's existing lifecycle rules.
+
+### How to run
+
+Prerequisites: Python 3.10 or later; for a real recording, a private bucket, an application key for the tool, a separate Egress key with only `writeFiles` on `incoming/sessions/`, and a LiveKit server with Egress (self-hosted or LiveKit Cloud). Environment variables: `B2_APPLICATION_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME`, `B2_REGION`, and `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` for the webhook; the endpoint is derived from `B2_REGION`. The command reads `.env` from the current directory only.
+
+```bash
+cd applications/voice-session-archive
+pip install -r requirements-dev.txt -e .
+python -m pytest -q   # emulated S3 and signed sample webhooks, no B2 account, no LiveKit server
+voice-session-archive synth --out ./demo --room support-room --session-id session-0001
+```
+
+It starts with a placeholder recording and an unsigned sample `egress_ended` body generated from a fixed seed. See the [application README](voice-session-archive/README.md) for the walkthrough, the steps for a real LiveKit recording, the key capabilities and the exit codes.
+
+### Known limitations
+
+The tests run against an emulated S3 server and signed sample webhooks, not a B2 account or a LiveKit server. The placeholder recording is tones, not speech. The tool uses one bucket with zone prefixes (production uses one bucket per zone), covers a single organization with no per-tenant isolation, covers LiveKit only, handles one webhook at a time without a queue, does not copy sessions to a protected zone or apply retention, and runs only integrity, duration and consent checks in its evaluation.
 
 ## How each entry is described
 

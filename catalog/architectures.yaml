@@ -346,15 +346,17 @@ architectures:
       profile: From a few sessions a day to continuous call volume
       notes: Capture and archive scale with the platform's recording throughput, not with B2. Each retained session is stored twice until the incoming copy expires; the incoming lifecycle bounds that overlap.
     validation:
-      status: documentation-reviewed
+      status: source-reviewed-and-automated-tests
       date: "2026-10-15"
       methods:
         - Platform behavior checked against LiveKit, Pipecat, Twilio, Daily and Vapi documentation on 2026-10-15
         - B2 behavior checked against the Backblaze documentation linked from the capability map
         - Session manifest example and synthetic session fixture validated against their schema in CI
+        - Application tests run in CI against an emulated S3 server and signed sample LiveKit webhooks, not against a B2 account or a LiveKit server
       evidence:
         - architectures/voice-agent-session-archive/architecture.md
         - docs/b2-capabilities.md
+        - applications/voice-session-archive/tests/
         - https://docs.livekit.io/home/egress/outputs/
         - https://docs.livekit.io/home/egress/api/
         - https://docs.livekit.io/home/server/webhooks/
@@ -379,7 +381,7 @@ architectures:
       - Provenance from dataset file to session, evaluation and consent ids
     links:
       architecture: architectures/voice-agent-session-archive/architecture.md
-      application: null
+      application: applications/voice-session-archive/README.md
       deployment: infrastructure/livekit-egress/README.md
       sample_data: testdata/synthetic-speech/README.md
       release_contract: schemas/session-manifest.schema.json
