@@ -109,16 +109,19 @@ architectures:
       notes: Collection and review run at any scale on standard B2. Training reads go through a local cache; B2 Overdrive applies only when sustained aggregate read throughput is the measured constraint.
     validation:
       status: source-reviewed-and-automated-tests
-      date: "2026-10-15"
+      date: "2026-10-16"
       methods:
         - Third-party behavior checked against each tool's official documentation or source code on 2026-10-15
         - B2 behavior checked against the Backblaze documentation linked from the capability map
         - Release manifest example validated against its schema and recomputed from the synthetic fixtures in CI
-        - Application tests run in CI against an emulated S3 server, not against a B2 account or the named tools
+        - Application tests run in CI against an emulated S3 server
+        - On 2026-10-16 the opt-in live check (not part of CI) passed once against a real B2 test bucket for authentication and the endpoint derived from the region, put, get, head, list, presigned PUT, multipart upload resumed after an interruption, presigned URL expiry and delete
+        - Not validated live as of 2026-10-16, namely per-object retention and release, bucket configuration (templates checked for shape only), Event Notification delivery, and the named tools
       evidence:
         - architectures/voice-training-data-lifecycle/architecture.md
         - docs/b2-capabilities.md
         - applications/voice-dataset-ingest/tests/
+        - applications/voice-dataset-ingest/tests/test_live.py
         - https://docs.nvidia.com/nemo-framework/user-guide/latest/nemotoolkit/asr/datasets.html
         - https://github.com/lhotse-speech/lhotse/blob/master/lhotse/cut/set.py
         - https://github.com/webdataset/webdataset
@@ -226,16 +229,19 @@ architectures:
       notes: Throughput is bound by the providers' job limits and the runner's concurrency, not by B2. Each output is stored at least twice while a candidate and its delivery coexist; candidate lifecycle bounds that overlap.
     validation:
       status: source-reviewed-and-automated-tests
-      date: "2026-10-15"
+      date: "2026-10-16"
       methods:
         - Provider behavior checked against ElevenLabs, Deepgram and AssemblyAI documentation on 2026-10-15
         - B2 behavior checked against the Backblaze documentation linked from the capability map
         - Generation job manifest example validated against its schema in CI
-        - Application tests run in CI against an emulated S3 server, not against a B2 account or the providers
+        - Application tests run in CI against an emulated S3 server
+        - On 2026-10-16 the opt-in live check (not part of CI) passed once against a real B2 test bucket for authentication and the endpoint derived from the region, put, get, list, server-side copy, presigned GET, presigned URL expiry and delete
+        - Not validated live as of 2026-10-16, namely bucket configuration (templates checked for shape only), and ElevenLabs, Deepgram and AssemblyAI
       evidence:
         - architectures/batch-voice-generation-and-dubbing/architecture.md
         - docs/b2-capabilities.md
         - applications/voice-generation-artifacts/tests/
+        - applications/voice-generation-artifacts/tests/test_live.py
         - https://elevenlabs.io/docs/api-reference/dubbing/create-project
         - https://elevenlabs.io/docs/api-reference/dubbing/language-targets/get-language-target
         - https://elevenlabs.io/docs/eleven-api/resources/webhooks
@@ -347,16 +353,19 @@ architectures:
       notes: Capture and archive scale with the platform's recording throughput, not with B2. Each retained session is stored twice until the incoming copy expires; the incoming lifecycle bounds that overlap.
     validation:
       status: source-reviewed-and-automated-tests
-      date: "2026-10-15"
+      date: "2026-10-16"
       methods:
         - Platform behavior checked against LiveKit, Pipecat, Twilio, Daily and Vapi documentation on 2026-10-15
         - B2 behavior checked against the Backblaze documentation linked from the capability map
         - Session manifest example and synthetic session fixture validated against their schema in CI
-        - Application tests run in CI against an emulated S3 server and signed sample LiveKit webhooks, not against a B2 account or a LiveKit server
+        - Application tests run in CI against an emulated S3 server and signed sample LiveKit webhooks
+        - On 2026-10-16 the opt-in live check (not part of CI, no LiveKit server involved) passed once against a real B2 test bucket for authentication and the endpoint derived from the region, put, head, get, the recording written before the session manifest, the manifest round trip and delete
+        - Not validated live as of 2026-10-16, namely LiveKit Egress, real webhook delivery, bucket configuration (templates checked for shape only), and the named platforms
       evidence:
         - architectures/voice-agent-session-archive/architecture.md
         - docs/b2-capabilities.md
         - applications/voice-session-archive/tests/
+        - applications/voice-session-archive/tests/test_live.py
         - https://docs.livekit.io/home/egress/outputs/
         - https://docs.livekit.io/home/egress/api/
         - https://docs.livekit.io/home/server/webhooks/

@@ -307,3 +307,27 @@ def test_applications_page_describes_the_applications_and_their_rules():
     assert "../AGENTS.md#applications" in text
     assert "emulated S3" in text
     assert EM_DASH not in text
+
+
+BLANKET_CLAIMS = (
+    "nothing in this repository has been run against a live",
+    "nothing here has been run against a live",
+    "has not been run against a live b2 account",
+    "have not been run against a live b2 account",
+    "not yet checked against a live bucket",
+)
+
+
+def test_public_text_states_what_was_validated_live_instead_of_a_blanket_claim():
+    paths = [REPO / "README.md", REPO / "AGENTS.md", CATEGORY_PAGE, SKILL, REPO / "applications" / "README.md"]
+    paths += sorted((REPO / "applications").glob("*/README.md")) + sorted((REPO / "architectures").glob("*/architecture.md"))
+    for path in paths:
+        text = path.read_text().lower()
+        for claim in BLANKET_CLAIMS:
+            assert claim not in text, f"{path.name}: {claim}"
+    catalog = yaml.safe_load((REPO / "catalog" / "architectures.yaml").read_text())
+    for entry in catalog["architectures"]:
+        validation = entry["validation"]
+        assert validation["status"] == "source-reviewed-and-automated-tests"
+        assert any(item.endswith("tests/test_live.py") for item in validation["evidence"]), entry["id"]
+        assert any(method.startswith("Not validated live") for method in validation["methods"]), entry["id"]

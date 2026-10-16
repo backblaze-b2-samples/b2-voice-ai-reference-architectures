@@ -10,7 +10,7 @@ Use this repository to design, review or extend storage workflows for voice and 
 4. `docs/b2-capabilities.md` maps each B2 capability to what it requires, its limitations and the architectures that use it.
 5. Current Backblaze product behavior is authoritative at <https://www.backblaze.com/docs/cloud-storage>. Pricing is authoritative at <https://www.backblaze.com/cloud-storage/pricing>.
 
-State the evidence basis when it matters to a recommendation. Documentation review and emulator-backed tests are not a production deployment, and nothing here has been run against a live B2 account or the named providers.
+State the evidence basis when it matters to a recommendation. Documentation review and emulator-backed tests are not a production deployment. The opt-in live checks (`tests/test_live.py` in each application) were run once on 2026-10-16 against a real B2 test bucket and cover storage operations only: authentication and endpoint derivation, put, get, head, list, presigned PUT and GET, server-side copy, manifest write order, delete, multipart resume and presigned URL expiry. Object retention and release, bucket configuration, Event Notification delivery, LiveKit Egress, the named providers and tenant isolation have not been validated live. Do not state more than that.
 
 ## Repository layout
 
@@ -51,7 +51,7 @@ bash tools/run_ts_examples.sh
 
 `python tools/check_markdown_links.py --external docs/related-b2-samples.md` checks that the external links of that page respond; it needs network access, so CI does not run it. Re-run the four B2 convention checks on a fresh clone of a sample and update its date on that page before adding or keeping a row.
 
-Run one application's tests from its own folder; CI does the same for each application in the `applications` job matrix. They need no B2 account: the applications use a single `B2_BUCKET_NAME` (a bucket on the emulated S3 server) with the zones as prefixes.
+Run one application's tests from its own folder; CI does the same for each application in the `applications` job matrix. They need no B2 account: the applications use a single `B2_BUCKET_NAME` (a bucket on the emulated S3 server) with the zones as prefixes. The live checks run only on request, as described under Applications.
 
 ```bash
 cd applications/<name>
@@ -88,7 +88,7 @@ Each application in `applications/<name>/` is a small Python command-line tool t
 - `pyproject.toml` with the project name `<name>`, a console script of the same name and the schemas as package data; the package in `src/<package>/` (the folder name with hyphens replaced by underscores); `requirements.txt` and `requirements-dev.txt` with an upper bound on every dependency; a `.gitignore`.
 - A `.env.example` file with `B2_APPLICATION_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME` and `B2_REGION`, and `B2_PUBLIC_URL_BASE` commented out. The endpoint is derived from `B2_REGION`; do not add an endpoint variable. The command-line entry point reads the env file only from the current directory.
 - One bucket per run, with the zones as top-level prefixes (`incoming/`, `work/`, `releases/`, `protected/`). The README says that production deployments use one bucket per zone, as the architectures do.
-- Tests in `tests/` against an emulated S3 server (moto) on the loopback interface, with no other network access and no credentials. `tests/test_live.py` runs only when `RUN_B2_LIVE_TESTS=1` and the `B2_*` variables are set, writes only under `live-test/<uuid>/` and removes what it writes.
+- Tests in `tests/` against an emulated S3 server (moto) on the loopback interface, with no other network access and no credentials. `tests/test_live.py` runs only when `RUN_B2_LIVE_TESTS=1` and the `B2_*` variables are set, is not part of CI, writes only under `live-test/<uuid>/`, removes what it writes and never calls retention or release operations. A run needs a key with `writeFiles`, `readFiles`, `listFiles` and `deleteFiles` on a test bucket. When a live run is reported, state its date and which checks it covered, and keep the README, the architecture Evidence section and the catalog `validation` block in agreement with it.
 - A README with the sections "B2's role", "Setup", "Tests" and "Known limitations".
 - A server or webhook receiver only when the workflow needs one; no web frontend or dashboard.
 - Bucket configuration (lifecycle, CORS, Event Notifications, Object Lock, replication) ships as templates and commands. Application code never applies it, and a test proves that the workflow sends no bucket configuration request. A README that shows a lifecycle or CORS command says, before the command, that it replaces all of the bucket's rules.
