@@ -12,86 +12,63 @@ Collect speech recordings with consent, validate and normalize them, review tran
 
 ## Data flow
 
-The flow is shown in two parts that share the `candidates/` and `evaluations/` prefixes of the work bucket. Edge numbers match the numbered steps below. Cylinders are B2 bucket prefixes (blue), green boxes are components you run, amber boxes are third-party tools or infrastructure outside B2, and the purple box is the contributor's client. Dotted edges are reads that do not move the clip forward.
-
-**Capture and validate (steps 1 to 6)**
+Read the top row left to right, then the bottom row. The numbers in each box are the steps below in which that component acts; the steps carry the prefixes, keys and ordering rules. Cylinders are B2 buckets (blue): the Work and Protected buckets appear in both rows and are the same buckets. Green boxes are components you run, the amber box is a third-party tool, and the purple box is the contributor's client. Dotted lines are consent reads.
 
 ```mermaid
 flowchart TB
-  APP["Contributor app"]
-  CS["Consent service<br/>and upload signer"]
-  PROT[("protected bucket<br/>consents/")]
-  INC[("incoming bucket<br/>contributions/")]
-  HOOK["Webhook receiver"]
-  Q["Queue outside B2"]
-  VAL["Validation worker"]
-  CAND[("work bucket<br/>candidates/")]
-  EVAL[("work bucket<br/>evaluations/validation/")]
-
-  APP -->|"1 accepts terms"| CS
-  CS -->|"1 consent record"| PROT
-  CS -->|"2 presigned PUT URL"| APP
-  APP -->|"3 clip and sidecar"| INC
-  INC -->|"4 signed event"| HOOK
-  HOOK -->|"4 job, once per eventId"| Q
-  Q --> VAL
-  INC -.->|"5 reads clip"| VAL
-  PROT -.->|"5 checks consent"| VAL
-  VAL -->|"6 accepted clips, NeMo lines"| CAND
-  VAL -->|"6 rejects, report"| EVAL
+  subgraph collect["Collect and validate"]
+    direction LR
+    CS["1, 2 Consent service"]
+    APP["1 to 3 Contributor app"]
+    PROT1[("Protected")]
+    INC[("Incoming")]
+    VAL["4 to 6 Webhook,<br/>queue, validation"]
+    WORK1[("Work")]
+    CS <--> APP
+    CS --> PROT1
+    APP --> INC
+    INC --> VAL
+    PROT1 -.-> VAL
+    VAL --> WORK1
+  end
+  subgraph release["Review, release and train"]
+    direction LR
+    LS["7 Label Studio"]
+    WORK2[("Work")]
+    PROT2[("Protected")]
+    BUILD["8 Release builder"]
+    REL[("Releases")]
+    JOB["9 Training jobs"]
+    LS <--> WORK2
+    WORK2 --> BUILD
+    PROT2 -.-> BUILD
+    BUILD --> REL
+    REL --> JOB
+    JOB --> WORK2
+  end
+  collect --> release
 
   classDef store fill:#dbeafe,stroke:#1d4ed8,color:#0b1b3a
   classDef svc fill:#dcfce7,stroke:#15803d,color:#052e16
   classDef ext fill:#fef3c7,stroke:#b45309,color:#3b2005
   classDef person fill:#f3e8ff,stroke:#7e22ce,color:#2e1065
-  class PROT,INC,CAND,EVAL store
-  class CS,HOOK,VAL svc
-  class Q ext
+  class PROT1,PROT2,INC,WORK1,WORK2,REL store
+  class CS,VAL,BUILD,JOB svc
+  class LS ext
   class APP person
+  style collect fill:#f8fafc,stroke:#94a3b8,color:#0f172a
+  style release fill:#f8fafc,stroke:#94a3b8,color:#0f172a
 ```
 
-**Review, release and train (steps 7 to 9)**
-
-```mermaid
-flowchart TB
-  CAND[("work bucket<br/>candidates/")]
-  LS["Label Studio<br/>(reviewers)"]
-  EVAL[("work bucket<br/>evaluations/")]
-  PROT[("protected bucket<br/>consents/")]
-  BUILD["Release builder"]
-  REL[("releases bucket<br/>datasets/&lt;dataset&gt;/&lt;version&gt;/")]
-  DVC[("releases bucket<br/>datasets/dvc/")]
-  JOB["Training job<br/>local cache and loaders"]
-  MLF["MLflow tracking server"]
-
-  CAND -->|"7 presigned GET"| LS
-  LS -->|"7 annotations to review/"| EVAL
-  CAND -->|"8 accepted lines"| BUILD
-  EVAL -->|"8 annotations"| BUILD
-  PROT -.->|"8 rechecks consent"| BUILD
-  BUILD -->|"8 files, release-manifest.json last"| REL
-  REL -->|"9 read-only expiring key"| JOB
-  JOB -->|"9 metrics and artifacts"| MLF
-  MLF -->|"9 to mlflow/"| EVAL
-  DVC -.->|"DVC remote, pinned by Git"| JOB
-
-  classDef store fill:#dbeafe,stroke:#1d4ed8,color:#0b1b3a
-  classDef svc fill:#dcfce7,stroke:#15803d,color:#052e16
-  classDef ext fill:#fef3c7,stroke:#b45309,color:#3b2005
-  class CAND,EVAL,PROT,REL,DVC store
-  class BUILD,JOB svc
-  class LS,MLF ext
-```
-
-1. The contributor accepts the recording and data-use terms. The consent service writes a consent record (schema: [`consent-record.schema.json`](../../schemas/consent-record.schema.json)) to the protected bucket before any upload URL exists.
+1. The contributor accepts the recording and data-use terms. The consent service writes a consent record (schema: [`consent-record.schema.json`](../../schemas/consent-record.schema.json)) to `consents/` in the protected bucket before any upload URL exists.
 2. The service signs a presigned PUT URL for one object under `contributions/`, with a short expiry and the expected `Content-Type`. The key that signs it can only write that prefix.
 3. The app uploads the clip and a small JSON sidecar with the `consent_id`, the prompt text and the capture settings. Large files use multipart upload with resume ([examples](../../examples/README.md#code-examples)).
 4. An Event Notification rule on `contributions/` calls a webhook. The receiver verifies the `X-Bz-Event-Notification-Signature` header, records the `eventId`, answers within the time limit and puts the work on a queue outside B2. Delivery is at least once, so a repeated event is dropped by the `eventId` check.
-5. The validation worker reads the consent record, refuses the clip if consent is missing, withdrawn, expired or does not permit training, and otherwise normalizes the audio (16 kHz, mono, 16-bit PCM in this repository's fixtures), runs the audio checks in [`tools/audio_checks.py`](../../tools/audio_checks.py), redacts personal data from transcripts, and assigns a pseudonymous speaker id.
+5. The validation worker takes the job from the queue, reads the clip and sidecar from `contributions/` and the consent record from `consents/`, refuses the clip if consent is missing, withdrawn, expired or does not permit training, and otherwise normalizes the audio (16 kHz, mono, 16-bit PCM in this repository's fixtures), runs the audio checks in [`tools/audio_checks.py`](../../tools/audio_checks.py), redacts personal data from transcripts, and assigns a pseudonymous speaker id.
 6. Accepted clips and one NeMo manifest line per clip (schema: [`dataset-line.schema.json`](../../schemas/dataset-line.schema.json)) go to `candidates/` in the work bucket. Rejections and their defect codes go to `evaluations/validation/`.
 7. Reviewers correct transcripts and labels in Label Studio. Label Studio reads `candidates/` through presigned GET URLs and writes annotations to `evaluations/review/`.
-8. The release builder takes the accepted, reviewed lines and writes a new release under `datasets/<dataset>/<version>/` in the releases bucket: audio, the NeMo JSONL manifest, Lhotse Shar shards, WebDataset shards, MosaicML Streaming (MDS) shards, `croissant.json`, a README and, last, `release-manifest.json`. A release is never rewritten; any change is a new version.
-9. Training jobs read one release with a read-only key that expires, copy or stream shards into a local cache, and log the release id and fingerprint with their results. MLflow artifacts and evaluation reports go to `evaluations/mlflow/`.
+8. The release builder reads the accepted lines from `candidates/` and the annotations from `evaluations/`, checks the consent record in `consents/` again for every clip and leaves out any clip whose consent is no longer valid, and writes a new release under `datasets/<dataset>/<version>/` in the releases bucket: audio, the NeMo JSONL manifest, Lhotse Shar shards, WebDataset shards, MosaicML Streaming (MDS) shards, `croissant.json`, a README and, last, `release-manifest.json`. A release is never rewritten; any change is a new version.
+9. Training jobs read one release with a read-only key that expires, copy or stream shards into a local cache, and log the release id and fingerprint with their results. Metrics, evaluation reports and model artifacts go through the MLflow tracking server, whose own key writes them to `evaluations/mlflow/` in the work bucket; the training key stays read-only. DVC in the training repository uses `datasets/dvc/` in the releases bucket as its remote, separate from the release folders.
 
 ## Pipeline stages
 

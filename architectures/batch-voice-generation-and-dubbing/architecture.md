@@ -14,85 +14,47 @@ Run dubbing, text-to-speech and transcription jobs in batches against hosted or 
 
 ## Data flow
 
-The flow is drawn in two parts that meet at the work bucket's `candidates/` prefix. Cylinders are B2 buckets (blue), green boxes are your own services, the orange box is the provider and purple boxes are people. Edge numbers match the steps listed below the diagrams.
-
-### Submit and collect (steps 1 to 7)
+Cylinders are B2 buckets (blue), green boxes are your own services, the orange box is the provider and purple boxes are people. Each edge carries the number of a step below; the steps and the tables later on this page hold the prefixes, keys and write order.
 
 ```mermaid
-flowchart TB
-  APP["Application"]
-  SRC[("incoming bucket<br/>source/")]
-  HOOK["Webhook receiver"]
-  Q["Queue outside B2"]
-  RUN["Job runner"]
-  PROT[("protected bucket<br/>consents/")]
-  PROV["Provider<br/>hosted or self-hosted"]
-  CAND[("work bucket<br/>candidates/")]
-
-  APP -->|"1. upload"| SRC
-  SRC -->|"2. signed event"| HOOK
-  HOOK -->|"2. job, once per eventId"| Q
-  Q --> RUN
-  PROT -->|"3. consent check"| RUN
-  RUN -->|"4. presigned GET URL"| PROV
-  PROV -->|"5. callback or poll"| RUN
-  PROV -->|"6. runner downloads outputs"| RUN
-  RUN -->|"7. outputs, then job manifest last"| CAND
+flowchart LR
+  APP["Application"] -->|1| SRC[("Incoming<br/>bucket")]
+  SRC -->|2| HOOK["Webhook<br/>and queue"]
+  HOOK -->|2| RUN["Job runner"]
+  PROT[("Protected<br/>bucket")] -->|3| RUN
+  RUN <-->|"4, 5, 6"| PROV["Provider"]
+  RUN -->|10| DEL[("Releases<br/>bucket")]
+  DEL -->|11| RCPT["Recipients<br/>or CDN"]
+  RUN -->|"7, 9"| CAND[("Work<br/>bucket")]
+  CAND -->|8| REV["Reviewers"]
+  REV -->|9| RUN
+  CAND -.->|12| GONE["Expired"]
 
   classDef storage fill:#e8f1fb,stroke:#2f6db5,color:#0b2545
   classDef compute fill:#eef7ee,stroke:#3a7d44,color:#123d1a
   classDef external fill:#fdf2e3,stroke:#c07a12,color:#4a2c00
-  class SRC,PROT,CAND storage
-  class APP,HOOK,Q,RUN compute
-  class PROV external
-```
-
-A hosted provider fetches the source from the incoming bucket with the URL from step 4 and never writes to B2. A self-hosted model or the placeholder worker instead reads the source and writes `candidates/` itself with its own scoped keys (see [Running the job and collecting outputs](#running-the-job-and-collecting-outputs)).
-
-### Review and deliver (steps 8 to 12)
-
-```mermaid
-flowchart TB
-  CAND[("work bucket<br/>candidates/")]
-  REV["Review tool<br/>and reviewers"]
-  RUN["Job runner"]
-  DEL[("releases bucket<br/>deliveries/")]
-  X["Deleted"]
-  CDN["CDN worker"]
-  RCPT["Recipient"]
-
-  CAND -->|"8. presigned GET"| REV
-  REV -->|"9. approve or reject"| RUN
-  RUN -->|"9. decision as new<br/>manifest version"| CAND
-  RUN -->|"10. copy approved outputs,<br/>manifest with lineage last"| DEL
-  CAND -.->|"12. lifecycle"| X
-  DEL -->|"11a. presigned GET"| RCPT
-  DEL -->|"11b. read-only key"| CDN
-  CDN --> RCPT
-
-  classDef storage fill:#e8f1fb,stroke:#2f6db5,color:#0b2545
-  classDef compute fill:#eef7ee,stroke:#3a7d44,color:#123d1a
   classDef human fill:#f3eafb,stroke:#7a4fb0,color:#2e1450
   classDef gone fill:#f4f4f4,stroke:#999,color:#555,stroke-dasharray:4 3
-  class CAND,DEL storage
-  class RUN,CDN compute
+  class SRC,PROT,CAND,DEL storage
+  class APP,HOOK,RUN compute
+  class PROV external
   class REV,RCPT human
-  class X gone
+  class GONE gone
 ```
 
 ### Steps
 
 1. The application uploads the source file (audio, video or a text script) to `source/` in the incoming bucket, with presigned PUT or multipart upload ([examples](../../examples/README.md#code-examples)). The object name carries a random id, never a speaker's name.
 2. The Event Notification rule on `source/` ([template](../../examples/event-notifications.json)) calls a webhook. The receiver verifies the `X-Bz-Event-Notification-Signature` header, records the `eventId`, answers, and puts a job on a queue outside B2.
-3. The job runner reads the consent records named for the source and refuses the job if any speaker's consent is missing, withdrawn, expired or does not cover the requested use (for example voice cloning in a dub).
-4. The runner creates the job manifest (schema: [`generation-job-manifest.schema.json`](../../schemas/generation-job-manifest.schema.json)), signs a presigned GET URL for the source with a lifetime chosen for that provider, and submits the job. A hosted provider receives only the URL; it never receives a B2 key.
+3. The job runner takes the job from the queue, reads the consent records named for the source from `consents/` in the protected bucket and refuses the job if any speaker's consent is missing, withdrawn, expired or does not cover the requested use (for example voice cloning in a dub).
+4. The runner creates the job manifest (schema: [`generation-job-manifest.schema.json`](../../schemas/generation-job-manifest.schema.json)), signs a presigned GET URL for the source with a lifetime chosen for that provider, and submits the job. A hosted provider receives only the URL, fetches the source from the incoming bucket with it, and never receives a B2 key.
 5. The provider reports completion through a callback or webhook, or the runner polls the provider's job status.
-6. The runner downloads the outputs through the provider's API or the short-lived URLs the provider returns. Hosted providers do not write to B2: the application copies their results.
+6. The runner downloads the outputs through the provider's API or the short-lived URLs the provider returns. Hosted providers do not write to B2: the application copies their results. A self-hosted model or the placeholder worker is the exception: it reads the source and writes `candidates/` itself with its own scoped keys (see [Running the job and collecting outputs](#running-the-job-and-collecting-outputs)).
 7. The runner writes the mixed output, per-speaker stems where available, subtitles or transcripts, and finally the job manifest under `candidates/<job_id>/` in the work bucket. Each output is listed with its size, SHA-256 and the time at which lifecycle rules will remove it.
 8. Reviewers listen to candidates through short-lived presigned GET URLs. The review tool holds no B2 key.
-9. The decision is recorded in the job manifest as a new object version (`review.status`, `review.decided_at`).
+9. The review tool sends the approve or reject decision to the job runner, which records it in the job manifest under `candidates/<job_id>/` as a new object version (`review.status`, `review.decided_at`).
 10. For an approved job, the runner copies the approved outputs to `deliveries/<release>/<version>/` in the releases bucket and writes the job manifest with its `promotion` block, including lineage, last. A delivery version is never rewritten.
-11. Approved outputs reach recipients through short-lived presigned GET URLs or a CDN in front of the private bucket.
+11. Approved outputs reach recipients through short-lived presigned GET URLs or through a CDN worker in front of the private bucket that reads `deliveries/` with a read-only key.
 12. The work bucket's lifecycle rule removes every candidate after the example period; approved outputs survive as copies in `deliveries/`, so only rejected and never-reviewed outputs are lost.
 
 ## Pipeline stages

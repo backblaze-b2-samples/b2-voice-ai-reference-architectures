@@ -14,45 +14,44 @@ B2 is never in the live audio path. The voice platform carries the conversation 
 
 ## Data flow
 
-The flow is drawn in two parts that meet at the protected bucket's `sessions/` prefix. The numbers on the arrows match the steps listed after the diagrams. Colours: blue cylinders are B2 buckets, purple cylinders are databases outside B2, green boxes are the operator's services, the grey dashed box is the external voice platform, and orange marks people.
-
-### Capture and evaluate (steps 1 to 6)
+The diagram is the overview; the numbered steps below it carry the detail (prefixes, keys, ordering and conditions). The numbers on the arrows match the steps. Colours: blue cylinders are B2 buckets, the purple cylinder is a database outside B2, green boxes are the operator's services, the grey dashed box is the external voice platform, and orange marks people. The arrow between the two groups stands for the evaluator reading consent records from the protected bucket (4) and copying sessions into it (6).
 
 ```mermaid
 flowchart TB
-  subgraph outside["Outside B2: the live call"]
-    PLAT["Voice platform (see table)<br/>caller and voice agent"]
+  subgraph capture["Capture and evaluate"]
+    direction LR
+    PLAT["Voice platform<br/>outside B2"]
+    INC[("incoming bucket")]
+    EV["Evaluator"]
+    EVR[("work bucket")]
+    PLAT -->|1| INC
+    INC -->|"3, 4"| EV
+    EV -->|5| EVR
   end
-  CAP["Capture service<br/>adapter or egress_ended handler"]
-  INC[("incoming bucket<br/>sessions/")]
-  HOOK["Webhook receiver<br/>no B2 key"]
-  Q["Queue<br/>outside B2"]
-  EV["Session evaluator"]
-  CONS[("protected bucket<br/>consents/")]
-  EVR[("work bucket<br/>evaluations/")]
-  PROT[("protected bucket<br/>sessions/")]
-  X["Deleted by lifecycle"]
-
-  PLAT -->|"1a. LiveKit Egress<br/>S3 output"| INC
-  PLAT -->|"egress_ended or callback;<br/>1b. download"| CAP
-  CAP -->|"1b. upload<br/>2. session manifest last"| INC
-  INC -->|"3. signed Event Notification"| HOOK
-  HOOK -->|"manifest only,<br/>once per eventId"| Q
-  Q --> EV
-  INC -->|"4. manifest and recordings"| EV
-  CONS -->|"4. consent records"| EV
-  EV -->|"5. results"| EVR
-  EV -->|"6. copy if class is not short,<br/>retention set, manifest last"| PROT
-  INC -.->|"lifecycle expiry"| X
+  subgraph use["Archive and use"]
+    direction LR
+    PROT[("protected bucket")]
+    SEL["Selection job"]
+    REV(["Reviewers"])
+    WH[("Analytics DB")]
+    DS[("releases bucket")]
+    PROT -->|8a| REV
+    PROT -->|7| SEL
+    SEL -->|8b| WH
+    SEL -->|8c| DS
+  end
+  capture <-->|"4 consents, 6 copy"| use
 
   classDef bucket fill:#dbeafe,stroke:#1d4ed8,color:#0b1b3a
   classDef service fill:#dcfce7,stroke:#15803d,color:#052e16
   classDef external fill:#f3f4f6,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
-  classDef gone fill:#fee2e2,stroke:#b91c1c,color:#450a0a
-  class INC,CONS,EVR,PROT bucket
-  class CAP,HOOK,Q,EV service
+  classDef store fill:#ede9fe,stroke:#6d28d9,color:#1e1b4b
+  classDef human fill:#ffedd5,stroke:#c2410c,color:#431407
+  class INC,EVR,PROT,DS bucket
+  class EV,SEL service
   class PLAT external
-  class X gone
+  class WH store
+  class REV human
 ```
 
 | Voice platform | Path to the incoming bucket |
@@ -60,48 +59,16 @@ flowchart TB
 | LiveKit | 1a. Egress writes the recording through B2's S3-compatible endpoint; the `egress_ended` handler writes the manifest |
 | Pipecat, Twilio, Daily, Vapi | 1b. A session adapter downloads (or, for Pipecat, receives) the recording, uploads it and writes the manifest |
 
-### Select and retrieve (steps 7 and 8)
-
-```mermaid
-flowchart TB
-  PROT[("protected bucket<br/>sessions/")]
-  CONS[("protected bucket<br/>consents/")]
-  DB[("Application database<br/>session index")]
-  SEL["Selection job"]
-  APP["Retrieval application<br/>authorizes, logs access"]
-  REV(["Reviewers and support"])
-  WH[("Analytics database")]
-  DS[("releases bucket<br/>datasets/")]
-
-  PROT -->|"7. evaluated manifests"| DB
-  DB -->|"7. passed, eligible_for<br/>names the use"| SEL
-  CONS -->|"7. consent re-read"| SEL
-  PROT -->|"selected files"| SEL
-  SEL -->|"8a. sessions to review"| APP
-  APP -->|"8a. short-lived presigned<br/>GET on protected sessions/"| REV
-  SEL -->|"8b. transcripts and events"| WH
-  SEL -->|"8c. versioned release,<br/>release manifest last"| DS
-
-  classDef bucket fill:#dbeafe,stroke:#1d4ed8,color:#0b1b3a
-  classDef service fill:#dcfce7,stroke:#15803d,color:#052e16
-  classDef store fill:#ede9fe,stroke:#6d28d9,color:#1e1b4b
-  classDef human fill:#ffedd5,stroke:#c2410c,color:#431407
-  class PROT,CONS,DS bucket
-  class SEL,APP service
-  class DB,WH store
-  class REV human
-```
-
 ### Steps
 
-1. While the session runs, the platform carries the audio. When recording is enabled, the recording reaches the incoming bucket's `sessions/<session_id>/` prefix by one of two paths: LiveKit Egress writes it directly through B2's S3-compatible endpoint (1a), or a session adapter receives the platform's completion callback, downloads the recording from the platform and uploads it to B2 (1b).
+1. While the session runs, the platform carries the audio; B2 is not in the live audio path. When recording is enabled, the recording reaches the incoming bucket's `sessions/<session_id>/` prefix by one of two paths: LiveKit Egress writes it directly through B2's S3-compatible endpoint (1a), or a session adapter receives the platform's completion callback, downloads the recording from the platform and uploads it to B2 (1b).
 2. When the session has ended and every file is in place, the adapter (or, for Egress, the handler of the `egress_ended` webhook) writes `sessions/<session_id>/session-manifest.json` last, with `evaluation.status` set to `pending` and an empty `eligible_for`.
-3. The Event Notification rule on `sessions/` ([template](../../examples/event-notifications.json), rule `evaluate-sessions`) calls a webhook. The receiver verifies the `X-Bz-Event-Notification-Signature` header on the raw body, records the `eventId`, answers, and queues an evaluation only for objects named `session-manifest.json`; events for the recording files themselves are acknowledged and ignored.
-4. The evaluator reads the manifest and the recordings with a read key, checks every listed file's size and SHA-256, and reads the consent records the manifest names.
+3. The Event Notification rule on `sessions/` ([template](../../examples/event-notifications.json), rule `evaluate-sessions`) calls a webhook. The receiver, which holds no B2 key, verifies the `X-Bz-Event-Notification-Signature` header on the raw body, records the `eventId`, answers, and queues an evaluation on a queue outside B2 only for objects named `session-manifest.json`; events for the recording files themselves are acknowledged and ignored.
+4. The evaluator reads the manifest and the recordings from the incoming bucket with a read key, checks every listed file's size and SHA-256, and reads the consent records the manifest names from `consents/` in the protected bucket.
 5. It runs the quality and safety checks described in [Session evaluation](#session-evaluation) and writes the detailed results to `evaluations/<session_id>/` in the work bucket.
-6. For sessions whose retention class requires archiving, the evaluator copies the recordings to `sessions/<session_id>/` in the protected bucket, sets per-object retention or a legal hold for the class, and writes the manifest with its completed `evaluation` block there last. The incoming copy expires through lifecycle.
-7. A selection job reads evaluated manifests from the protected bucket (through an index in the application database) and selects only sessions whose evaluation `passed`, whose `eligible_for` names the use, and whose consent is still active and covers that use at selection time.
-8. Selected sessions reach reviewers through short-lived presigned GET URLs, feed an analytics database through their transcripts and events, or become part of a versioned dataset release.
+6. For sessions whose retention class requires archiving (`standard`, `extended` and `legal-hold`), the evaluator copies the recordings to `sessions/<session_id>/` in the protected bucket, sets per-object retention or a legal hold for the class, and writes the manifest with its completed `evaluation` block there last. Sessions in the `short` class are not copied. The incoming copy expires through lifecycle.
+7. A selection job reads evaluated manifests from the protected bucket (through an index in the application database) and selects only sessions whose evaluation `passed`, whose `eligible_for` names the use, and whose consent is still active and covers that use at selection time; it reads the latest version of each consent record in `consents/` again to check this.
+8. Selected sessions reach reviewers through short-lived presigned GET URLs for files in the protected bucket, issued by the application after it authorizes the person and records the access (8a), feed an analytics database through their transcripts and events (8b), or become part of a versioned dataset release under `datasets/` in the releases bucket, with the release manifest written last (8c).
 
 ## Capture paths
 
