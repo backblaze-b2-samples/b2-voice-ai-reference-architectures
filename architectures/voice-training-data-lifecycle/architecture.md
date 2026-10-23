@@ -12,39 +12,48 @@ Collect speech recordings with consent, validate and normalize them, review tran
 
 ## Data flow
 
-Read the top row left to right, then the bottom row. The numbers in each box are the steps below in which that component acts; the steps carry the prefixes, keys and ordering rules. Cylinders are B2 buckets (blue): the Work and Protected buckets appear in both rows and are the same buckets. Green boxes are components you run, the amber box is a third-party tool, and the purple box is the contributor's client. Dotted lines are consent reads.
+Read the left panel top to bottom, then the right panel. Each arrow starts with the number of the step below that it belongs to; the steps add the keys, schemas and ordering rules. Cylinders are B2 buckets (blue) with their prefixes: the Work and Protected buckets appear in both panels and are the same buckets. Green boxes are components you run, the amber box is a third-party tool, and the purple box is the contributor's client. Dotted arrows are reads that do not move data forward: consent checks and the DVC remote.
 
 ```mermaid
-flowchart TB
+---
+config:
+  flowchart:
+    nodeSpacing: 12
+    rankSpacing: 12
+---
+flowchart LR
   subgraph collect["Collect and validate"]
-    direction LR
-    CS["1, 2 Consent service"]
-    APP["1 to 3 Contributor app"]
-    PROT1[("Protected")]
-    INC[("Incoming")]
-    VAL["4 to 6 Webhook,<br/>queue, validation"]
-    WORK1[("Work")]
-    CS <--> APP
-    CS --> PROT1
-    APP --> INC
-    INC --> VAL
-    PROT1 -.-> VAL
-    VAL --> WORK1
+    direction TB
+    APP["Contributor app"]
+    CS["Consent service"]
+    PROT1[("Protected<br/>consents/")]
+    INC[("Incoming<br/>contributions/")]
+    VAL["Webhook, queue,<br/>validation"]
+    WORK1[("Work<br/>candidates/<br/>evaluations/")]
+    APP -->|"1 accepts"| CS
+    CS -->|"1 consent record"| PROT1
+    CS -->|"2 PUT URL"| APP
+    APP -->|"3 clip, sidecar"| INC
+    INC -->|"4 signed event"| VAL
+    PROT1 -.->|"5 consent check"| VAL
+    VAL -->|"6 clips, rejects"| WORK1
   end
   subgraph release["Review, release and train"]
-    direction LR
-    LS["7 Label Studio"]
-    WORK2[("Work")]
-    PROT2[("Protected")]
-    BUILD["8 Release builder"]
-    REL[("Releases")]
-    JOB["9 Training jobs"]
-    LS <--> WORK2
-    WORK2 --> BUILD
-    PROT2 -.-> BUILD
-    BUILD --> REL
-    REL --> JOB
-    JOB --> WORK2
+    direction TB
+    WORK2[("Work<br/>candidates/<br/>evaluations/")]
+    LS["Label Studio"]
+    PROT2[("Protected<br/>consents/")]
+    BUILD["Release builder"]
+    REL[("Releases<br/>datasets/")]
+    JOB["Training jobs"]
+    WORK2 <-->|"7 GET, annotations"| LS
+    WORK2 -->|"8 reviewed lines"| BUILD
+    PROT2 -.->|"8 recheck"| BUILD
+    BUILD -->|"8 manifest last"| REL
+    REL -->|"9 read-only key"| JOB
+    JOB -->|"9 via MLflow"| WORK2
+    DVC[("Releases<br/>datasets/dvc/")]
+    DVC -.->|"DVC remote"| JOB
   end
   collect --> release
 
@@ -52,7 +61,7 @@ flowchart TB
   classDef svc fill:#dcfce7,stroke:#15803d,color:#052e16
   classDef ext fill:#fef3c7,stroke:#b45309,color:#3b2005
   classDef person fill:#f3e8ff,stroke:#7e22ce,color:#2e1065
-  class PROT1,PROT2,INC,WORK1,WORK2,REL store
+  class PROT1,PROT2,INC,WORK1,WORK2,REL,DVC store
   class CS,VAL,BUILD,JOB svc
   class LS ext
   class APP person

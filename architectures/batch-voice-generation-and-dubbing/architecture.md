@@ -14,21 +14,29 @@ Run dubbing, text-to-speech and transcription jobs in batches against hosted or 
 
 ## Data flow
 
-Cylinders are B2 buckets (blue), green boxes are your own services, the orange box is the provider and purple boxes are people. Each edge carries the number of a step below; the steps and the tables later on this page hold the prefixes, keys and write order.
+Cylinders are B2 buckets (blue), green boxes are your own services, the orange box is the provider and purple boxes are people. The job runner appears once in each row: it is the same component. Each edge starts with the number of a step below; the steps and the tables later on this page hold the exact prefixes, keys and write order.
 
 ```mermaid
-flowchart LR
-  APP["Application"] -->|1| SRC[("Incoming<br/>bucket")]
-  SRC -->|2| HOOK["Webhook<br/>and queue"]
-  HOOK -->|2| RUN["Job runner"]
-  PROT[("Protected<br/>bucket")] -->|3| RUN
-  RUN <-->|"4, 5, 6"| PROV["Provider"]
-  RUN -->|10| DEL[("Releases<br/>bucket")]
-  DEL -->|11| RCPT["Recipients<br/>or CDN"]
-  RUN -->|"7, 9"| CAND[("Work<br/>bucket")]
-  CAND -->|8| REV["Reviewers"]
-  REV -->|9| RUN
-  CAND -.->|12| GONE["Expired"]
+%%{init: {"flowchart": {"nodeSpacing": 20, "rankSpacing": 30}}}%%
+flowchart TB
+  subgraph S1["Submit and collect"]
+    direction LR
+    PROV["Provider"] <-->|"4 presigned<br/>URL, 5 done,<br/>6 download"| RUN["Job<br/>runner"]
+    APP["Application"] -->|"1 upload<br/>source"| SRC[("Incoming<br/>source/")]
+    SRC -->|"2 signed<br/>event"| HOOK["Webhook<br/>and queue"]
+    HOOK -->|"2 job, once<br/>per eventId"| RUN
+    PROT[("Protected<br/>consents/")] -->|"3 consent<br/>check"| RUN
+  end
+  subgraph S2["Review and deliver"]
+    direction LR
+    REV["Reviewers"] -->|"9 approve<br/>or reject"| PROM["Job<br/>runner"]
+    PROM -->|"9 decision"| CAND[("Work<br/>candidates/")]
+    PROM -->|"10 copy<br/>approved,<br/>manifest<br/>last"| DEL[("Releases<br/>deliveries/")]
+    CAND -->|"8 presigned<br/>GET"| REV
+    CAND -.->|"12 lifecycle<br/>expiry"| GONE["Expired"]
+    DEL -->|"11 presigned<br/>GET or CDN"| RCPT["Recipients"]
+  end
+  S1 -->|"7 outputs, manifest last"| S2
 
   classDef storage fill:#e8f1fb,stroke:#2f6db5,color:#0b2545
   classDef compute fill:#eef7ee,stroke:#3a7d44,color:#123d1a
@@ -36,7 +44,7 @@ flowchart LR
   classDef human fill:#f3eafb,stroke:#7a4fb0,color:#2e1450
   classDef gone fill:#f4f4f4,stroke:#999,color:#555,stroke-dasharray:4 3
   class SRC,PROT,CAND,DEL storage
-  class APP,HOOK,RUN compute
+  class APP,HOOK,RUN,PROM compute
   class PROV external
   class REV,RCPT human
   class GONE gone

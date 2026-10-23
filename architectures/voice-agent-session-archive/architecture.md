@@ -14,41 +14,44 @@ B2 is never in the live audio path. The voice platform carries the conversation 
 
 ## Data flow
 
-The diagram is the overview; the numbered steps below it carry the detail (prefixes, keys, ordering and conditions). The numbers on the arrows match the steps. Colours: blue cylinders are B2 buckets, the purple cylinder is a database outside B2, green boxes are the operator's services, the grey dashed box is the external voice platform, and orange marks people. The arrow between the two groups stands for the evaluator reading consent records from the protected bucket (4) and copying sessions into it (6).
+The diagram is the overview; the numbered steps below it carry the full detail (keys, ordering and conditions). Each arrow starts with the number of its step. Colours: blue cylinders are B2 buckets, the purple cylinder is a database outside B2, green boxes are the operator's services, the grey dashed box is the external voice platform, and orange marks people. The arrow between the two groups stands for the evaluator reading consent records from the protected bucket (4) and copying sessions into it (6).
 
 ```mermaid
 flowchart TB
   subgraph capture["Capture and evaluate"]
     direction LR
     PLAT["Voice platform<br/>outside B2"]
-    INC[("incoming bucket")]
-    EV["Evaluator"]
-    EVR[("work bucket")]
-    PLAT -->|1| INC
-    INC -->|"3, 4"| EV
-    EV -->|5| EVR
+    CAP["Adapter or<br/>Egress handler"]
+    INC[("incoming<br/>sessions/<br/>lifecycle<br/>expiry")]
+    EV["Session<br/>evaluator"]
+    EVR[("work<br/>evaluations/")]
+    PLAT -->|"1a Egress<br/>S3 output"| INC
+    CAP -->|"1b upload<br/>2 manifest<br/>last"| INC
+    INC -->|"3 webhook,<br/>queue<br/>4 read"| EV
+    EV -->|"5<br/>results"| EVR
   end
   subgraph use["Archive and use"]
     direction LR
-    PROT[("protected bucket")]
-    SEL["Selection job"]
-    REV(["Reviewers"])
+    PROT[("protected<br/>sessions/<br/>consents/")]
+    SEL["Selection job<br/>via app DB index"]
+    REV(["Reviewers via<br/>retrieval app"])
     WH[("Analytics DB")]
-    DS[("releases bucket")]
-    PROT -->|8a| REV
-    PROT -->|7| SEL
-    SEL -->|8b| WH
-    SEL -->|8c| DS
+    DS[("releases<br/>datasets/")]
+    PROT -->|"8a presigned<br/>GET"| REV
+    PROT -->|"7 passed,<br/>consented"| SEL
+    SEL -->|"8b transcripts,<br/>events"| WH
+    SEL -->|"8c release,<br/>manifest last"| DS
   end
-  capture <-->|"4 consents, 6 copy"| use
+  capture <-->|"4 consent check<br/>6 copy by retention class"| use
 
   classDef bucket fill:#dbeafe,stroke:#1d4ed8,color:#0b1b3a
   classDef service fill:#dcfce7,stroke:#15803d,color:#052e16
   classDef external fill:#f3f4f6,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
   classDef store fill:#ede9fe,stroke:#6d28d9,color:#1e1b4b
   classDef human fill:#ffedd5,stroke:#c2410c,color:#431407
+  classDef gone fill:#fee2e2,stroke:#b91c1c,color:#450a0a
   class INC,EVR,PROT,DS bucket
-  class EV,SEL service
+  class CAP,EV,SEL service
   class PLAT external
   class WH store
   class REV human
