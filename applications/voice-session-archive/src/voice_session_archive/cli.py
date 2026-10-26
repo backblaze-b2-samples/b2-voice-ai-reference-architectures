@@ -1,7 +1,8 @@
 """Command line: synth, register-session, egress-request, handle-webhook, serve and evaluate.
 
 Exit codes: 0 processed (or ignored on purpose), 2 rejected (token, webhook body or input, always
-before any call to B2), 1 any other error (B2 or configuration).
+before any call to B2), 3 `evaluate` completed with the status `failed` (the result is printed and
+written as usual), 1 any other error (B2 or configuration).
 
 The env file is read here, at the start of `main`, from the current directory only.
 """
@@ -16,7 +17,7 @@ from typing import Any
 from botocore.exceptions import BotoCoreError, ClientError
 
 from . import __version__, config, egress, evaluation, server, sessions, storage, synth, webhook
-from .errors import EXIT_ERROR, EXIT_OK, ArchiveError
+from .errors import EXIT_ERROR, EXIT_EVALUATION_FAILED, EXIT_OK, ArchiveError
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -33,6 +34,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_argument("--out", type=Path, required=True, help="directory to write into")
     sub.add_argument("--seconds", type=float, default=4.0)
     sub.add_argument("--seed", type=int, default=7)
+    sub.add_argument("--consent-id", default=None,
+                     help="id of the demo consent record (default consent-<session_id>-caller)")
     sub.add_argument("--put", action="store_true",
                      help="also upload the recording into the session folder, as Egress would, and the consent record")
 
@@ -55,7 +58,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_argument("--port", type=int, default=server.DEFAULT_PORT)
     sub.add_argument("--state-dir", type=Path, default=Path(config.DEFAULT_STATE_DIR))
 
-    sub = commands.add_parser("evaluate", help="run the session evaluation and write the manifest again, last")
+    sub = commands.add_parser("evaluate", help="run the session evaluation and write the manifest again, last; "
+                                               "exit code 3 when the status is failed")
     session_arguments(sub)
     return parser
 
@@ -90,7 +94,8 @@ def _run(args: argparse.Namespace, endpoint_url: str | None) -> Any:
     if args.command == "synth":
         storage.check_id(args.room, "room", storage.ROOM_PATTERN)
         storage.check_id(args.session_id, "session id")
-        plan = synth.build_demo(args.out, args.room, args.session_id, args.seconds, args.seed)
+        consent_id = storage.check_id(args.consent_id or synth.demo_consent_id(args.session_id), "consent id")
+        plan = synth.build_demo(args.out, args.room, args.session_id, args.seconds, args.seed, consent_id=consent_id)
         if args.put:
             settings = config.Settings.from_environ()
             client = storage.make_client(settings, endpoint_url)
@@ -123,6 +128,8 @@ def main(argv: list[str] | None = None, *, endpoint_url: str | None = None) -> i
         print(f"error: {type(error).__name__}: {error}", file=sys.stderr)
         return EXIT_ERROR
     print(json.dumps(result, indent=2, sort_keys=True, default=str))
+    if args.command == "evaluate" and result.get("status") == "failed":
+        return EXIT_EVALUATION_FAILED
     return EXIT_OK
 
 

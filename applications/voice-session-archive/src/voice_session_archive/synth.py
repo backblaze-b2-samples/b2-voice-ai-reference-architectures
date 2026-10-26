@@ -97,15 +97,24 @@ def egress_ended_event(event_id: str, room: str, files: list[tuple[str, int]], s
     return event("egress_ended", event_id, int(started_at + seconds), egressInfo=info)
 
 
+def demo_consent_id(session_id: str) -> str:
+    """The demo consent id of a session: unique per session id, so runs that share a bucket stay apart."""
+    return f"consent-{session_id}-caller"
+
+
 def build_demo(out: Path, room: str, session_id: str, seconds: float = 4.0, seed: int = 7,
-               started_at: int = 1767225600) -> dict[str, Any]:
-    """Write a recording, a consent record and an unsigned egress_ended body into `out`."""
+               started_at: int = 1767225600, consent_id: str | None = None) -> dict[str, Any]:
+    """Write a recording, a consent record and an unsigned egress_ended body into `out`.
+
+    The consent id defaults to `demo_consent_id(session_id)`, so the same arguments give the same files.
+    """
     out.mkdir(parents=True, exist_ok=True)
     recording = write_recording(out / "recording.wav", seconds, seed)
     key = storage.session_prefix(room, session_id) + "recording.wav"
-    consent = consent_record("consent_demo_caller", "caller_1")
-    (out / "consent_demo_caller.json").write_text(json.dumps(consent, indent=2) + "\n")
+    consent = consent_record(consent_id or demo_consent_id(session_id), "caller_1")
+    consent_path = out / f"{consent['consent_id']}.json"
+    consent_path.write_text(json.dumps(consent, indent=2) + "\n")
     body = egress_ended_event(f"EV_{session_id}", room, [(key, recording.stat().st_size)], started_at, seconds)
     (out / "egress-ended.json").write_text(json.dumps(body) + "\n")
-    return {"recording": str(recording), "recording_key": key, "consent": str(out / "consent_demo_caller.json"),
+    return {"recording": str(recording), "recording_key": key, "consent": str(consent_path),
             "consent_id": consent["consent_id"], "event_body": str(out / "egress-ended.json")}

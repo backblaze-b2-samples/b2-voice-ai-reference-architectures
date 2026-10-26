@@ -78,6 +78,23 @@ def test_app_never_configures_bucket(lab, recorded, capsys):
             assert path.lstrip("/").startswith(zones), path
 
 
+def test_synth_derives_a_consent_id_per_session(capsys, tmp_path):
+    def synth(*extra: str) -> dict:
+        capsys.readouterr()
+        assert cli.main(["synth", "--out", str(tmp_path / "demo"), "--room", "support-room", *extra]) == 0
+        return json.loads(capsys.readouterr().out)
+
+    first = synth("--session-id", "session-0001")
+    assert first["consent_id"] == "consent-session-0001-caller"
+    assert json.loads(Path(first["consent"]).read_text())["consent_id"] == first["consent_id"]
+    assert synth("--session-id", "session-0001") == first  # deterministic
+    assert synth("--session-id", "session-0002")["consent_id"] == "consent-session-0002-caller"
+    chosen = synth("--session-id", "session-0001", "--consent-id", "consent-team-a")
+    assert chosen["consent_id"] == "consent-team-a"
+    assert cli.main(["synth", "--out", str(tmp_path / "demo"), "--room", "support-room",
+                     "--session-id", "session-0001", "--consent-id", "Bad Id"]) == 2
+
+
 def test_register_session_rejects_bad_input_before_b2(lab, recorded):
     before = len(all_calls(recorded))
     base = ["register-session", "--room", lab.room, "--session-id", lab.session_id]

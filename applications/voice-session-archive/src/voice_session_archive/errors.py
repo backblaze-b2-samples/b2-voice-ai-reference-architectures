@@ -4,12 +4,15 @@ Exit code 0: processed, or ignored on purpose.
 Exit code 2: rejected. A token, a webhook body or an input did not pass its check, and no call to B2
 was made.
 Exit code 1: any other error (B2 or configuration).
+Exit code 3: `evaluate` completed and the session's evaluation status is `failed`. The result is
+printed, and the evaluation and the new manifest version are written as for any other status.
 """
 from __future__ import annotations
 
 EXIT_OK = 0
 EXIT_ERROR = 1
 EXIT_REJECTED = 2
+EXIT_EVALUATION_FAILED = 3
 
 
 class ArchiveError(Exception):

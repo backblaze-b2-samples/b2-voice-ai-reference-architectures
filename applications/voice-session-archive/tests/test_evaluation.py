@@ -14,10 +14,10 @@ def archive_session(lab, consent_ids=("consent_caller",)) -> None:
     assert lab.deliver(lab.body([(key, size)])) == 0
 
 
-def evaluate(lab, capsys) -> dict:
+def evaluate(lab, capsys, expected_code: int = 0) -> dict:
     capsys.readouterr()
     code = lab.run(["evaluate", "--room", lab.room, "--session-id", lab.session_id])
-    assert code == 0
+    assert code == expected_code
     return json.loads(capsys.readouterr().out)
 
 
@@ -35,8 +35,9 @@ def test_evaluation_passes_with_active_consent(lab, capsys):
 
 def test_evaluation_fails_without_consent_record(lab, capsys):
     archive_session(lab)
-    result = evaluate(lab, capsys)
+    result = evaluate(lab, capsys, expected_code=3)
     assert result["status"] == "failed"
+    assert lab.keys(f"{storage.EVALUATIONS}{lab.room}/{lab.session_id}/") == [result["result"]]
     manifest = lab.read_json(lab.manifest_key)
     assert manifest["evaluation"]["eligible_for"] == []
     assert manifest["evaluation"]["safety"]["status"] == "fail"
@@ -46,19 +47,19 @@ def test_evaluation_fails_without_consent_record(lab, capsys):
 def test_evaluation_fails_with_revoked_consent(lab, capsys):
     lab.consent(status="revoked")
     archive_session(lab)
-    assert evaluate(lab, capsys)["status"] == "failed"
+    assert evaluate(lab, capsys, expected_code=3)["status"] == "failed"
 
 
 def test_evaluation_fails_without_consent_ids(lab, capsys):
     archive_session(lab, consent_ids=())
-    assert evaluate(lab, capsys)["status"] == "failed"
+    assert evaluate(lab, capsys, expected_code=3)["status"] == "failed"
 
 
 def test_evaluation_detects_a_changed_recording(lab, capsys):
     lab.consent()
     archive_session(lab)
     lab.recording(seconds=3.0)  # replaced after the manifest was written
-    result = evaluate(lab, capsys)
+    result = evaluate(lab, capsys, expected_code=3)
     assert result["status"] == "failed"
     checks = lab.read_json(lab.manifest_key)["evaluation"]["quality"]["checks"]
     assert checks[0]["name"] == "integrity" and checks[0]["result"] == "fail"
