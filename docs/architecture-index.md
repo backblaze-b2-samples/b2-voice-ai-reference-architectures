@@ -28,7 +28,7 @@ Send sources to dubbing, speech synthesis and transcription providers through pr
 Archive finished voice agent sessions from LiveKit Egress or a session adapter, evaluate each session for quality and safety, retain it per class under Object Lock, and select only passed, consented sessions for review, analytics or datasets.
 
 - **Audience:** Backend engineers, Voice agent developers, ML engineers, Platform engineers
-- **Problem:** Voice agent platforms produce recordings, tracks, transcripts and events that must be kept for a defined period, traced to consent, and checked before anyone reuses them; most platforms do not write to B2 themselves.
+- **Problem:** Voice agent platforms produce recordings, tracks, transcripts and events that must be kept for a defined period, traced to consent, and checked before anyone reuses them; LiveKit Egress writes them to B2 directly, and an adapter copies them from the other platforms.
 - **Workflow:** Record the session with LiveKit Egress to B2, or copy it from the platform with an adapter -> Write the session manifest last, when the session has ended -> Start evaluation on a signed Event Notification for the manifest -> Run quality and safety checks and record the result and eligible uses -> Copy sessions to the protected zone with retention per class -> Retrieve sessions through short-lived presigned URLs issued by the application -> Select passed sessions whose consent covers the use into dataset releases
 - **Expected scale:** From a few sessions a day to continuous call volume. Capture and archive scale with the platform's recording throughput, not with B2. Each retained session is stored twice until the incoming copy expires; the incoming lifecycle bounds that overlap.
 

@@ -63,7 +63,7 @@ flowchart TB
 9. The review tool sends the approve or reject decision to the job runner, which records it (`review.status`, `review.decided_at`). In the application, an approval is recorded only in the manifest published in step 10; the manifest under `candidates/<job_id>/` is not rewritten and keeps `review.status` `pending`.
 10. For an approved job, the runner copies the approved outputs to `deliveries/<release>/<version>/` in the releases bucket and writes the job manifest with its `promotion` block, including lineage, last. A delivery version is never rewritten.
 11. Approved outputs reach recipients through short-lived presigned GET URLs or through a CDN worker in front of the private bucket that reads `deliveries/` with a read-only key.
-12. The work bucket's lifecycle rule removes every candidate after the example period; approved outputs survive as copies in `deliveries/`, so only rejected and never-reviewed outputs are lost.
+12. The work bucket's lifecycle rule removes every candidate after the example period; approved outputs survive as copies in `deliveries/`, so only rejected and never-reviewed outputs are removed.
 
 ## Pipeline stages
 
@@ -88,7 +88,7 @@ Write the chosen lifetime to `input.delivery.expires_in_seconds` and, when the p
 | Provider | Completion signal | How the outputs are retrieved | Connection to B2 |
 |---|---|---|---|
 | ElevenLabs Dubbing | Workspace webhooks passed as `webhook_ids` receive `dubbing_project_ready` or `dubbing_project_failed`, then `dubbing_language_completed` or `dubbing_language_failed` per language. Delivery is best effort and can repeat. Polling the project and its language targets is the alternative. | The language target's `outputs` holds signed URLs for the dubbed audio (`lossless_audio`, FLAC) and subtitles (`subtitles`, WebVTT). They expire one hour after they are issued; reading the language target again returns fresh ones. | Application copy |
-| Deepgram | The `callback` URL receives the result with `POST`, or `PUT` with `callback_method=put`. Non-2xx answers are retried up to 10 times, 30 seconds apart. Without `callback`, the response carries the result. | The callback body or the response is the transcript JSON. | Application copy. Deepgram also documents passing an S3 presigned PUT URL as the `callback`, so the transcript is written straight to the bucket; that path is not tested against B2 here. |
+| Deepgram | The `callback` URL receives the result with `POST`, or `PUT` with `callback_method=put`. Non-2xx answers are retried up to 10 times, 30 seconds apart. Without `callback`, the response carries the result. | The callback body or the response is the transcript JSON. | Application copy. Deepgram also documents passing an S3 presigned PUT URL as the `callback`, so the transcript is written straight to the bucket; that path is outside this repository's validation scope. |
 | AssemblyAI | `webhook_url` receives `transcript_id` and `status` (`completed` or `error`), with an optional custom header set by `webhook_auth_header_name` and `webhook_auth_header_value`. The endpoint must answer 2xx within 10 seconds. Polling `GET /v2/transcript/{transcript_id}` is the alternative. | `GET /v2/transcript/{transcript_id}`; the webhook does not carry the transcript. | Application copy |
 | Self-hosted model or placeholder worker | The worker's own job status. | The worker writes outputs itself. | The worker reads the source with a read key or a presigned GET URL and writes `candidates/` with a scoped key. |
 
@@ -152,7 +152,7 @@ What B2 is not in this workflow, and what does that job instead.
 ## Where B2 does not fit
 
 - **Interactive speech synthesis.** A user waiting for speech needs a streaming response from the provider; writing to B2 and reading back adds a round trip. Store the result afterwards if it must be kept.
-- **Provider-side editing.** Edits made in a provider's editor (for example Dubbing Studio) live in the provider until they are exported; B2 only holds what the application exports and copies.
+- **Provider-side editing.** Edits made in a provider's editor (for example Dubbing Studio) live in the provider until they are exported; B2 holds what the application exports and copies.
 - **Native provider output to B2.** The hosted providers in this workflow return results through their APIs or short-lived URLs; none writes to a B2 bucket as a configured destination. The application performs the copy.
 - **Cross-call search and dashboards.** B2 holds transcripts and analysis files; filtering and aggregating across calls belongs in a database or warehouse.
 - **Single files processed once.** If a file is dubbed once and its output is used once, a direct upload to the provider and a local copy of the result are simpler than this pipeline.
@@ -235,9 +235,9 @@ All entries were read on the date shown. Product behavior can change; the linked
 ## Known limitations
 
 - Per-tenant isolation is not covered. The layout assumes a single organization; separate tenants need their own buckets and keys.
-- Live validation is limited to what the Evidence section lists: storage operations on 2026-10-16 and one manual walkthrough of the commands on 2026-10-26. Not validated live: lifecycle expiry of candidates and cleanup; bucket configuration (lifecycle, CORS, Event Notification, replication and encryption templates are checked for shape only), and ElevenLabs, Deepgram and AssemblyAI. Provider behavior is taken from their documentation on the dates above. The application's CI tests run against an emulated S3 server.
+- Live validation is limited to what the Evidence section lists: storage operations on 2026-10-16 and one manual walkthrough of the commands on 2026-10-26. Outside the live runs: lifecycle expiry of candidates and cleanup; bucket configuration (lifecycle, CORS, Event Notification, replication and encryption templates are checked for shape only), and ElevenLabs, Deepgram and AssemblyAI. Provider behavior is taken from their documentation on the dates above. The application's CI tests run against an emulated S3 server.
 - ElevenLabs and Deepgram do not document how long after submission they fetch an input URL; the lifetimes on this page are guidance, not measured values.
-- Deepgram's presigned PUT callback is documented for AWS S3 and has not been tested with a B2 presigned PUT URL.
+- Deepgram's presigned PUT callback is documented for AWS S3; using it with a B2 presigned PUT URL is outside the validation scope.
 - Per-speaker stems from ElevenLabs are covered only as a Dubbing Studio export; the project API outputs described here are the dubbed track and subtitles.
-- The [`voice-generation-artifacts`](../../applications/voice-generation-artifacts/README.md) application covers submitting a job to a worker, candidates and stems, promotion by copy with lineage and delivery manifests, in a single bucket with zone prefixes. Its only worker is a placeholder that writes synthetic tones. The repository has no review tool, consent check or provider adapter; it also provides the job manifest schema and example, the configuration templates and the provisioning helper those components would use.
-- Copies already delivered to recipients cannot be recalled by storage after a consent withdrawal.
+- The [`voice-generation-artifacts`](../../applications/voice-generation-artifacts/README.md) application covers submitting a job to a worker, candidates and stems, promotion by copy with lineage and delivery manifests, in a single bucket with zone prefixes. Its only worker is a placeholder that writes synthetic tones. The review tool, the consent check and the provider adapter are components of your deployment; the repository provides the job manifest schema and example, the configuration templates and the provisioning helper they use.
+- After a consent withdrawal, copies already delivered to recipients are held outside storage and are handled with those recipients.

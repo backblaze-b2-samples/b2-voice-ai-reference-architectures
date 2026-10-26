@@ -1,6 +1,6 @@
 # Voice and speech AI on Backblaze B2
 
-This page describes how Backblaze B2 fits into voice and speech AI systems: what the category covers, what B2 stores, what B2 does not do, which B2 service level to use, and which architecture in this repository applies to a given workflow. It is written to be read by engineers and by AI agents that need to decide whether B2 belongs in a design.
+This page describes how Backblaze B2 fits into voice and speech AI systems: what the category covers, what B2 stores, which parts of the system run outside B2, which B2 service level to use, and which architecture in this repository applies to a given workflow. It is written to be read by engineers and by AI agents that need to decide whether B2 belongs in a design.
 
 Current B2 product behavior is documented at <https://www.backblaze.com/docs/cloud-storage>. Prices and egress allowances are at the [B2 pricing page](https://www.backblaze.com/cloud-storage/pricing) and are not copied into this repository.
 
@@ -63,7 +63,7 @@ B2 Overdrive is a separate high-throughput offering. It applies only to sustaine
 | [Batch voice generation and dubbing](../architectures/batch-voice-generation-and-dubbing/architecture.md) | You send sources to dubbing, speech synthesis or transcription providers and need reviewed, versioned deliveries; includes batch transcription and call analytics | `source-reviewed-and-automated-tests` |
 | [Voice agent session archive](../architectures/voice-agent-session-archive/architecture.md) | You run voice agents and need to keep, evaluate and selectively reuse finished sessions | `source-reviewed-and-automated-tests` |
 
-Each architecture has a data-flow diagram, `decisions.md` and `object-layout.md`, and states its boundaries, where B2 does not fit, security, evidence and known limitations. The generated [architecture index](architecture-index.md) and the [machine-readable catalog](../catalog/architectures.yaml) list the same entries with their integrations. The status `source-reviewed-and-automated-tests` means the design rests on provider and B2 documentation read on the dates in each Evidence section and on application tests that run in CI against an emulator, plus opt-in live storage checks run against a real B2 test bucket on 2026-10-16. It does not mean the architecture is tested end to end: per-object retention and release, bucket configuration, Event Notification delivery, LiveKit Egress and the named providers were not validated live.
+Each architecture has a data-flow diagram, `decisions.md` and `object-layout.md`, and states its boundaries, where B2 does not fit, security, evidence and known limitations. The generated [architecture index](architecture-index.md) and the [machine-readable catalog](../catalog/architectures.yaml) list the same entries with their integrations. The status `source-reviewed-and-automated-tests` means the design rests on provider and B2 documentation read on the dates in each Evidence section and on application tests that run in CI against an emulator, plus opt-in live storage checks run against a real B2 test bucket on 2026-10-16 and one manual walkthrough of each application's commands on 2026-10-26. It does not mean the architecture is tested end to end: bucket configuration, Event Notification delivery, LiveKit Egress and the named providers are outside the scope of the live runs.
 
 ## How the architectures lay out storage
 
@@ -91,14 +91,14 @@ Use these architectures when:
 
 ## When not to use
 
-Do not use B2, or these architectures, when:
+Use a different component, alongside or instead of these architectures, when:
 
 - the data is needed during a live call or at interactive latency: use the voice platform's real-time path and a memory or low-latency store;
 - you need to query across clips or sessions: load the manifests into a database or search index, because listing a prefix is not a query;
 - a dataset fits on one disk and is read once, or a file is processed once: a local copy is simpler than these pipelines;
 - the workload is per-step random reads of small objects during training: shard the release and read from a local cache;
 - you need isolation between tenants in one deployment: the layouts assume a single organization and do not define per-tenant buckets or keys;
-- you need a runnable application, session adapter, evaluator or retention job: the repository provides schemas, templates, examples and fixtures for them, not those components.
+- you need a packaged session adapter, evaluator or retention job: the repository provides the schemas, templates, examples, fixtures and reference applications to build them on.
 
 ## FAQ
 
@@ -133,10 +133,10 @@ The application decides consent; B2 stores the records and enforces immutability
 The session archive runs a quality and safety evaluation step after capture. Only sessions that passed, and whose consent covers the intended use at selection time, can be selected for human review, analytics or model improvement.
 
 **Are the examples tested against B2?**
-The tests run in CI against a local S3-compatible emulator (moto), and the configuration templates are checked for shape. Each application also has an opt-in live check, not part of CI, that was run once on 2026-10-16 against a real B2 test bucket and covers storage operations: authentication and endpoint derivation, put, get, head, list, presigned PUT and GET, server-side copy, manifest write order, delete, multipart resume and presigned URL expiry. On 2026-10-26 one manual walkthrough of each application's commands (not `tests/test_live.py`) was run against a real B2 test bucket with Object Lock and SSE-B2: `voice-dataset-ingest` through `release` with per-object GOVERNANCE retention, `voice-generation-artifacts` through `submit`, `promote` and `deliver`, and `voice-session-archive` through `register-session`, `handle-webhook`, `serve` and `evaluate`. They are one-off manual runs, not repeatable tests. Bucket configuration, Event Notification delivery, LiveKit Egress and the named providers were not validated live. Each architecture's Evidence section states its basis.
+The tests run in CI against a local S3-compatible emulator (moto), and the configuration templates are checked for shape. Each application also has an opt-in live check, not part of CI, that was run once on 2026-10-16 against a real B2 test bucket and covers storage operations: authentication and endpoint derivation, put, get, head, list, presigned PUT and GET, server-side copy, manifest write order, delete, multipart resume and presigned URL expiry. On 2026-10-26 one manual walkthrough of each application's commands (not `tests/test_live.py`) was run against a real B2 test bucket with Object Lock and SSE-B2: `voice-dataset-ingest` through `release` with per-object GOVERNANCE retention, `voice-generation-artifacts` through `submit`, `promote` and `deliver`, and `voice-session-archive` through `register-session`, `handle-webhook`, `serve` and `evaluate`. They are one-off manual runs, not repeatable tests. Bucket configuration, Event Notification delivery, LiveKit Egress and the named providers are outside the scope of the live runs. Each architecture's Evidence section states its basis.
 
 **Is there an agent skill?**
 Yes. The [`b2-voice-speech-ai` skill](../skill/SKILL.md) gives an agent the voice-specific decisions and delegates B2 basics such as endpoint derivation, keys and presigned URLs to the shared B2 skill.
 
 **Where are the sample applications?**
-[`applications/`](../applications/README.md) lists sample applications that implement these architectures. No sample applications are linked yet.
+[`applications/`](../applications/README.md) lists the three sample applications that implement these architectures: `voice-dataset-ingest`, `voice-generation-artifacts` and `voice-session-archive`.

@@ -13,7 +13,7 @@ Each decision states the context, the choice, the alternatives considered and th
 ## D2. LiveKit Egress writes to B2 directly; other platforms go through an adapter
 
 - **Date:** 2026-10-15
-- **Context:** LiveKit Egress documents an S3 output with a custom endpoint and lists Backblaze as S3-compatible. Twilio and Daily document custom storage only on AWS S3 (Daily also OCI by request), Vapi documents a fixed list of storage providers that does not include B2, and Pipecat documents no storage upload at all.
+- **Context:** LiveKit Egress documents an S3 output with a custom endpoint and lists Backblaze as S3-compatible. Twilio and Daily document custom storage only on AWS S3 (Daily also OCI by request), Vapi documents a fixed list of storage providers that does not include B2, and Pipecat documents no storage upload.
 - **Choice:** LiveKit Egress is the main path, with the request template in `infrastructure/livekit-egress/`. For Pipecat, Twilio, Daily and Vapi, a session adapter receives the completion signal, downloads the recording through the platform's API and uploads it to B2. The catalog marks Egress as `native-s3-output` and the others as `application-copy`.
 - **Alternatives:** Letting Twilio or Daily write to an AWS S3 bucket and replicating from there. It adds a second cloud account and a second copy, and the copy to B2 still has to be built.
 - **Consequences:** The adapter pays the transfer of each recording once and holds the platform's API credentials. The repository ships notes for these adapters, not code.

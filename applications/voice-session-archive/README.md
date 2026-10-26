@@ -53,6 +53,11 @@ Install with `pip install -e .` (Python 3.10 or later). The runtime dependencies
 
 This runs the whole workflow against your bucket without LiveKit: `synth --put` plays the part of Egress, and the token is signed locally with PyJWT, which `requirements-dev.txt` installs.
 
+Before you start:
+
+- Run the commands from an empty working folder. The tool writes the demo files to `./demo` and its state folder, `.voice-session-archive/`, in the current directory.
+- Export `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` in your shell. The token line reads them from the environment; `handle-webhook` also reads them from `.env`.
+
 ```bash
 voice-session-archive synth --out ./demo --room support-room --session-id session-0001 --put
 voice-session-archive register-session --room support-room --session-id session-0001 \
@@ -67,7 +72,7 @@ voice-session-archive handle-webhook --body demo/egress-ended.json --authorizati
 voice-session-archive evaluate --room support-room --session-id session-0001
 ```
 
-The `LIVEKIT_*` variables must be in the environment for the token line (`handle-webhook` also reads them from `.env`). Running `handle-webhook` again with the same body prints `duplicate`: the event id was already processed.
+Running `handle-webhook` again with the same body prints `duplicate`: the event id was already processed.
 
 ## Run it against a real LiveKit recording
 
@@ -172,12 +177,10 @@ python -m pytest -q
 
 - **The live check covers storage operations only.** The CI tests run against moto and signed sample bodies. On 2026-10-16 the opt-in live check passed against a real B2 test bucket for authentication and the endpoint derived from the region, put, head, get, manifest write order and round trip, and delete. It calls the storage functions of this tool, not `handle-webhook` or `serve`. No LiveKit server, LiveKit Egress or real webhook delivery was involved, and no bucket configuration was applied or read.
 - **The commands were run once by hand against a real bucket.** On 2026-10-26 a manual walkthrough (not `tests/test_live.py`) ran against a real B2 test bucket with Object Lock and SSE-B2, using a key without `deleteFiles`, with `synth --put` standing in for Egress and no LiveKit server: `register-session`, `egress-request`, `handle-webhook` (`archived`, then `duplicate` for the same event id), `evaluate` (`passed`) and `serve` on the loopback interface (HTTP 200 for `archived` and for `duplicate`, 401 for a malformed token and for a missing Authorization header). The recording and `session.json` were written before the first manifest version, `evaluate` rewrote the manifest as a new version, and the objects reported server-side encryption AES256 and no object retention. A wrong secret, a missing Authorization header, a changed body, an invalid role and a recording key outside `incoming/sessions/` (exit 2), and a duplicate registration, `evaluate` without a manifest, an unregistered session and a missing recording (exit 1) were refused. LiveKit Egress, real webhook delivery, lifecycle expiry and cleanup were not exercised.
-- **`evaluate` exits 0 when its status is `failed`** (for example when the registered consent id has no record), so a script must read the `status` field, not the exit code.
-- **`synth` writes the fixed consent id `consent_demo_caller`**, which `--put` overwrites as a new version, so two users of one bucket share it.
 - **Webhook fields come from documentation.** The webhook fields (`event`, `id`, `createdAt`, `egressInfo`, `fileResults`, `filename`, `size`, `duration`, `status`) were taken from LiveKit's documentation on 2026-10-15 ([webhooks](https://docs.livekit.io/home/server/webhooks/), [Egress API](https://docs.livekit.io/home/egress/api/), [tokens](https://docs.livekit.io/frontends/authentication/tokens/)). Those pages do not name the signing algorithm or the encoding of the body hash; the receiver accepts only HS256 and a base64 SHA-256, and fails closed on anything else.
 - **Timestamps.** LiveKit's API reference does not state the unit of `startedAt` and `endedAt`; the tool tells nanoseconds, microseconds, milliseconds and seconds apart by magnitude. File durations are read as nanoseconds, as documented.
 - **One recording layout.** Recordings must be inside `incoming/sessions/<room>/<session_id>/`, as `egress-request` asks; a recording written elsewhere in the room's prefix is reported as a configuration error and gets no manifest.
 - **Single organization, single bucket.** There is no per-tenant isolation or per-tenant prefix. Production deployments use one bucket per zone.
-- **No retention, copy to the protected zone or selection job.** The manifest records the retention class; applying retention, copying sessions to a protected bucket under Object Lock and selecting sessions into datasets are left to other components. The evaluation runs only integrity, duration and consent checks.
-- **No queue and one request at a time.** The receiver hashes the recording before it answers, which can take a while for a long session; a production receiver acknowledges quickly and hands the work to a queue.
-- **Lost webhooks.** If LiveKit gives up on a webhook, the tool does not notice; there is no periodic check of open sessions.
+- **Retention, protected copies and selection belong to other components.** The manifest records the retention class; applying retention, copying sessions to a protected bucket under Object Lock and selecting sessions into datasets are handled by the components that own them. The evaluation runs only integrity, duration and consent checks.
+- **One request at a time.** The receiver hashes the recording before it answers. For long sessions, a production receiver acknowledges quickly and hands the work to a queue.
+- **Webhook delivery.** The tool processes the webhooks LiveKit delivers. A periodic check of open sessions, for a webhook that LiveKit stops retrying, belongs to the deployment around it.

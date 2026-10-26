@@ -181,12 +181,12 @@ python -m pytest -q
 - **Event Notifications are validated against signed sample bodies only.** Delivery by B2 was not exercised, and no bucket configuration (lifecycle, CORS, notification rules, replication, encryption) was applied or read; those templates are checked for shape only.
 - **Single organization, single bucket.** There is no per-tenant isolation or per-tenant prefix. Production deployments use one bucket per zone.
 - **Simple audio processing.** Normalization uses a basic resampler and downmix written with the standard library. It checks readable 16-bit PCM WAV files; other formats are rejected. It does not transcribe, align, redact or deduplicate.
-- **No receiver, queue or scheduler.** Delivering webhooks, running `process` and `release`, and retrying are left to whoever operates the tool.
-- **Candidates are not deleted.** A clip rejected after an earlier acceptance (for example because its consent was revoked) leaves its old candidate file in place and drops out of the manifest, because the tool does not hold `deleteFiles`. Lifecycle rules, applied by you, expire candidates.
-- **Releases cannot be withdrawn by this tool.** Removing a version before its retention ends needs a key with `bypassGovernance`, which this tool never uses. Withdrawal is an operator action outside it.
+- **Receiver, queue and scheduler come from the deployment.** Delivering webhooks, running `process` and `release`, and retrying are handled by whoever operates the tool.
+- **Lifecycle rules expire candidates.** A clip rejected after an earlier acceptance (for example because its consent was revoked) drops out of the manifest, and its earlier candidate file stays in place because the tool does not hold `deleteFiles`. The lifecycle rules you apply expire it.
+- **Withdrawing a release is an operator action.** Removing a version before its retention ends needs a key with `bypassGovernance`, which this tool never uses by design.
 - **Synthetic data.** The data from `synth` is tones, not speech, and its consent records describe synthetic subjects.
-- **Region and bucket rules are not validated beyond their shape.** The tool derives the endpoint from `B2_REGION` and does not check that the bucket lives in that region.
+- **Set `B2_REGION` to the bucket's region.** The tool derives the endpoint from it.
 
 ## When to use it
 
-Use it to see, in a few hundred lines, how consent gating, signed events, a manifest written last and per-object retention fit together on B2, or as a starting point for an ingest service. Do not use it as a production pipeline as it is: add the receiver, queue, review and monitoring your deployment needs.
+Use it to see, in a few hundred lines, how consent gating, signed events, a manifest written last and per-object retention fit together on B2, or as a starting point for an ingest service. It is a reference implementation; for production, add the receiver, queue, review and monitoring your deployment needs.

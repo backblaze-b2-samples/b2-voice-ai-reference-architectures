@@ -117,7 +117,7 @@ architectures:
         - Application tests run in CI against an emulated S3 server
         - On 2026-10-16 the opt-in live check (not part of CI) passed once against a real B2 test bucket for authentication and the endpoint derived from the region, put, get, head, list, presigned PUT, multipart upload resumed after an interruption, presigned URL expiry and delete
         - On 2026-10-26 a manual walkthrough of the voice-dataset-ingest commands (not the opt-in live check) ran against a real B2 test bucket with Object Lock and SSE-B2 for upload, process, release with GOVERNANCE retention read back with head_object, refusal of a repeated release, refusal of an upload with an unknown consent id, and a presigned PUT
-        - Not validated live as of 2026-10-26, namely deletion after retention expires, bucket configuration (templates checked for shape only), Event Notification delivery, and the named tools
+        - "Not validated live as of 2026-10-26: deletion after retention expires, bucket configuration (templates checked for shape only), Event Notification delivery, and the named tools"
       evidence:
         - architectures/voice-training-data-lifecycle/architecture.md
         - docs/b2-capabilities.md
@@ -238,7 +238,7 @@ architectures:
         - Application tests run in CI against an emulated S3 server
         - On 2026-10-16 the opt-in live check (not part of CI) passed once against a real B2 test bucket for authentication and the endpoint derived from the region, put, get, list, server-side copy, presigned GET, presigned URL expiry and delete
         - On 2026-10-26 a manual walkthrough of the voice-generation-artifacts commands (not the opt-in live check) ran against a real B2 test bucket with Object Lock and SSE-B2 for synth-source, submit, promote with approval and deliver (seven presigned URLs answered 200, an unsigned GET 401), with the manifest written last, the delivered objects matching the manifest SHA-256 and the refusal of a repeated submit, a promote without approval, a repeated promote and invalid arguments
-        - Not validated live as of 2026-10-26, namely candidate expiry by lifecycle and cleanup, bucket configuration (templates checked for shape only), and ElevenLabs, Deepgram and AssemblyAI
+        - "Not validated live as of 2026-10-26: candidate expiry by lifecycle and cleanup, bucket configuration (templates checked for shape only), and ElevenLabs, Deepgram and AssemblyAI"
       evidence:
         - architectures/batch-voice-generation-and-dubbing/architecture.md
         - docs/b2-capabilities.md
@@ -279,7 +279,7 @@ architectures:
       - Voice agent developers
       - ML engineers
       - Platform engineers
-    problem: Voice agent platforms produce recordings, tracks, transcripts and events that must be kept for a defined period, traced to consent, and checked before anyone reuses them; most platforms do not write to B2 themselves.
+    problem: Voice agent platforms produce recordings, tracks, transcripts and events that must be kept for a defined period, traced to consent, and checked before anyone reuses them; LiveKit Egress writes them to B2 directly, and an adapter copies them from the other platforms.
     workflow:
       - Record the session with LiveKit Egress to B2, or copy it from the platform with an adapter
       - Write the session manifest last, when the session has ended
@@ -363,7 +363,7 @@ architectures:
         - Application tests run in CI against an emulated S3 server and signed sample LiveKit webhooks
         - On 2026-10-16 the opt-in live check (not part of CI, no LiveKit server involved) passed once against a real B2 test bucket for authentication and the endpoint derived from the region, put, head, get, the recording written before the session manifest, the manifest round trip and delete
         - On 2026-10-26 a manual walkthrough of the voice-session-archive commands (not the opt-in live check) ran against a real B2 test bucket with Object Lock and SSE-B2, with a stand-in for Egress and no LiveKit server, for register-session, handle-webhook (archived, then duplicate), evaluate and serve on the loopback interface, with the recording and session.json written before the first manifest version and the refusal of a wrong secret, a missing Authorization header, a changed body and a duplicate registration
-        - Not validated live as of 2026-10-26, namely lifecycle expiry and cleanup, LiveKit Egress, real webhook delivery, bucket configuration (templates checked for shape only), and the named platforms
+        - "Not validated live as of 2026-10-26: lifecycle expiry and cleanup, LiveKit Egress, real webhook delivery, bucket configuration (templates checked for shape only), and the named platforms"
       evidence:
         - architectures/voice-agent-session-archive/architecture.md
         - docs/b2-capabilities.md

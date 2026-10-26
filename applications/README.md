@@ -43,7 +43,7 @@ It starts with synthetic data generated from a fixed seed. See the [application 
 
 ### Known limitations
 
-The tests run against an emulated S3 server; the opt-in live check confirmed put, get, list, presigned PUT, presigned PUT expiry and multipart resume against a real B2 bucket on 2026-10-16, and a manual walkthrough on 2026-10-26 covered `release` with per-object GOVERNANCE retention, but not Event Notification delivery. The tool uses one bucket with zone prefixes (production uses one bucket per zone), covers a single organization with no per-tenant isolation, normalizes audio with a simple standard-library resampler, has no HTTP receiver or queue, and cannot withdraw a published version, because that needs a key with `bypassGovernance` that it never uses. The synthetic clips are tones, not speech.
+The tests run against an emulated S3 server; the opt-in live check confirmed put, get, list, presigned PUT, presigned PUT expiry and multipart resume against a real B2 bucket on 2026-10-16, and a manual walkthrough on 2026-10-26 covered `release` with per-object GOVERNANCE retention, but not Event Notification delivery. The tool uses one bucket with zone prefixes (production uses one bucket per zone), covers a single organization with no per-tenant isolation, normalizes audio with a standard-library resampler, and leaves the HTTP receiver and queue to the deployment. Withdrawing a published version is an operator action, because it needs a key with `bypassGovernance`, which the tool never uses. The synthetic clips are tones, not speech.
 
 ## voice-generation-artifacts
 
@@ -74,7 +74,7 @@ It starts with a source generated from a fixed seed. See the [application README
 
 ### Known limitations
 
-The audio is synthetic placeholder audio, tones rather than speech, and nothing is dubbed or synthesized. The tests run against an emulated S3 server; the opt-in live check confirmed put, get, list, server-side copy, presigned GET and presigned GET expiry against a real B2 bucket on 2026-10-16, and a manual walkthrough on 2026-10-26 ran `submit`, `promote` and `deliver` against one, but no provider was called and lifecycle expiry was not observed. The tool uses one bucket with zone prefixes (production uses one bucket per zone), covers a single organization with no per-tenant isolation, has no review step, consent service or queue, and cannot remove a published version. A delivery manifest is a bearer credential until its URLs expire.
+The audio is synthetic placeholder audio, tones rather than speech, and nothing is dubbed or synthesized. The tests run against an emulated S3 server; the opt-in live check confirmed put, get, list, server-side copy, presigned GET and presigned GET expiry against a real B2 bucket on 2026-10-16, and a manual walkthrough on 2026-10-26 ran `submit`, `promote` and `deliver` against one, but no provider was called and lifecycle expiry was not observed. The tool uses one bucket with zone prefixes (production uses one bucket per zone), covers a single organization with no per-tenant isolation, and leaves review, consent decisions, queuing and the removal of a published version to the operator. A delivery manifest is a bearer credential until its URLs expire.
 
 ## voice-session-archive
 
@@ -105,7 +105,7 @@ It starts with a placeholder recording and an unsigned sample `egress_ended` bod
 
 ### Known limitations
 
-The tests run against an emulated S3 server and signed sample webhooks; the opt-in live check confirmed put, head, get and the order of the recording and the session manifest against a real B2 bucket on 2026-10-16, and a manual walkthrough on 2026-10-26 ran `register-session`, `handle-webhook`, `serve` and `evaluate` against one, in both cases without a LiveKit server, so LiveKit Egress and real webhook delivery were not exercised. The placeholder recording is tones, not speech. The tool uses one bucket with zone prefixes (production uses one bucket per zone), covers a single organization with no per-tenant isolation, covers LiveKit only, handles one webhook at a time without a queue, does not copy sessions to a protected zone or apply retention, and runs only integrity, duration and consent checks in its evaluation.
+The tests run against an emulated S3 server and signed sample webhooks; the opt-in live check confirmed put, head, get and the order of the recording and the session manifest against a real B2 bucket on 2026-10-16, and a manual walkthrough on 2026-10-26 ran `register-session`, `handle-webhook`, `serve` and `evaluate` against one, in both cases without a LiveKit server, so LiveKit Egress and real webhook delivery were not exercised. The placeholder recording is tones, not speech. The tool uses one bucket with zone prefixes (production uses one bucket per zone), covers a single organization with no per-tenant isolation, covers LiveKit, handles one webhook at a time, leaves the copy to a protected zone, retention and queuing to other components, and runs integrity, duration and consent checks in its evaluation.
 
 ## How each entry is described
 

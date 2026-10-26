@@ -32,7 +32,7 @@ To try it against a bucket you own, follow [Setup](#setup) and the [walkthrough]
 - **Presigned GET URLs.** A worker that runs elsewhere, such as a hosted provider, reads the source from a URL that signs one object and expires, so it never holds a key. `submit` gives the worker such a URL, and `deliver` issues URLs to recipients.
 - **Server-side copy.** `promote` publishes a candidate with a copy request inside B2. The audio is not downloaded and uploaded again, so promotion does not depend on the operator's bandwidth.
 - **Lifecycle rules.** Candidates that are not promoted expire on their own. The template and command are in [Configurations it ships](#configurations-it-ships).
-- **Not B2's job.** The generation itself, the review of candidates and the consent decision stay in your application. This tool records consent ids when you pass them and does not check them.
+- **Not B2's job.** The generation itself, the review of candidates and the consent decision stay in your application. This tool records the consent ids you pass to `submit` in the job manifest.
 
 ## Setup
 
@@ -51,7 +51,7 @@ Install with `pip install -e .` (Python 3.10 or later). The runtime dependencies
 
 ## Walkthrough
 
-The source is generated from a fixed seed: a tone that stands in for a recording, so no person is recorded and no model is involved.
+The source is generated from a fixed seed: a tone that stands in for a recording, so no person is recorded and no model is involved. Run the commands from an empty working folder; they write the demo files to `./demo` in the current directory.
 
 ```bash
 voice-generation-artifacts synth-source --out ./demo --put --source-id interview --seconds 4
@@ -147,13 +147,12 @@ python -m pytest -q
 - **The commands were run once by hand against a real bucket.** On 2026-10-26 a manual walkthrough (not `tests/test_live.py`) ran against a real B2 test bucket with Object Lock and SSE-B2, using a key without `deleteFiles`: `synth-source --put`, `submit` (two languages, two speakers, six outputs), `promote --approve` (six objects copied to the version prefix) and `deliver` (seven presigned URLs, all answered 200; an unsigned GET answered 401). The job manifest was the last object written under the candidate prefix and under the version prefix, the six delivered objects matched the SHA-256 values in the manifest, the manifest held no signed URL, and the objects reported server-side encryption AES256 and no Object Lock retention, because the tool sets none. A repeated `submit` of an attempt (exit 1), `promote` without `--approve` (exit 2), a repeated `promote` of a version (exit 1), an out-of-range `--expires`, a bad source id, a missing source and a nonexistent attempt (exit 2) were refused. Lifecycle expiry of candidates and cleanup were not observed (the key has no `deleteFiles`); only the `expires_at` field in the manifest was.
 - **No provider and no bucket configuration were involved.** ElevenLabs, Deepgram and AssemblyAI were not called, and no lifecycle, CORS, notification or other bucket configuration was applied or read; those templates are checked for shape only.
 - **Single organization, single bucket.** There is no per-tenant isolation or per-tenant prefix. Production deployments use one bucket per zone.
-- **No review step, consent service or queue.** Review is a decision you make and confirm with `--approve`. Consent ids passed to `submit` are recorded and not checked. Running commands, retrying and scheduling are left to whoever operates the tool.
-- **No command lists or presigns candidates for review**, so review needs the `b2` CLI or your own script, and `--consent-id` is recorded without being checked.
+- **Review, consent and scheduling stay with the operator.** Review is a decision you make and confirm with `--approve`, and consent decisions belong to your consent service. Running commands, retrying and scheduling are handled by whoever operates the tool.
 - **A failed promotion needs a new version name.** The tool refuses to write into a version prefix that already holds objects, and it has no `deleteFiles`, so objects left by a failed copy stay until you remove them. They carry no `job-manifest.json`, so they are not a published version.
-- **Candidates and delivery manifests are not deleted by the tool.** Lifecycle rules, applied by you, remove them.
-- **Withdrawal is an operator action.** Presigned URLs already issued work until they expire, and copies already delivered cannot be recalled by storage. This tool has no command that removes a published version.
+- **Lifecycle rules remove candidates and delivery manifests.** The tool holds no `deleteFiles`; the lifecycle rules you apply expire them.
+- **Withdrawal is an operator action.** Presigned URLs already issued work until they expire, and copies already delivered stay with their recipients. Removing a published version is an operator step outside the tool.
 - **Small sources.** The placeholder worker reads the source into memory and accepts WAV files of at most 120 seconds.
 
 ## When to use it
 
-Use it to see, in a few hundred lines, how candidates, review, promotion by copy, lineage and bearer-style delivery manifests fit together on B2, or as a starting point for a job runner: replace `PlaceholderWorker` with an adapter for your provider or model. Do not use it as a production pipeline as it is.
+Use it to see, in a few hundred lines, how candidates, review, promotion by copy, lineage and bearer-style delivery manifests fit together on B2, or as a starting point for a job runner: replace `PlaceholderWorker` with an adapter for your provider or model. It is a reference implementation; a production pipeline adds the provider adapter, review tooling and scheduling your deployment needs.

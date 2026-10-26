@@ -53,4 +53,4 @@ The output `filepath` is `sessions/{room_name}/{time}`. `{room_name}` and `{time
 
 ## Validation status
 
-The request fields were read from LiveKit's Egress documentation on 2026-10-15: [outputs](https://docs.livekit.io/home/egress/outputs/), [API reference](https://docs.livekit.io/home/egress/api/) and [self-hosting](https://docs.livekit.io/transport/self-hosting/egress/). `tests/test_infrastructure.py` checks the filled template (endpoint derived from the region, `force_path_style`, bucket and key placeholders). It has not been run against a live Egress service or a B2 bucket.
+The request fields were read from LiveKit's Egress documentation on 2026-10-15: [outputs](https://docs.livekit.io/home/egress/outputs/), [API reference](https://docs.livekit.io/home/egress/api/) and [self-hosting](https://docs.livekit.io/transport/self-hosting/egress/). `tests/test_infrastructure.py` checks the filled template (endpoint derived from the region, `force_path_style`, bucket and key placeholders). Running it against a live Egress service and a B2 bucket is outside the validation scope.
