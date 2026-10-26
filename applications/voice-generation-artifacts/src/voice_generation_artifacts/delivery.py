@@ -1,4 +1,10 @@
-"""Promote an approved attempt to a published version, and issue delivery manifests for it.
+"""Review an attempt's candidates, promote an approved attempt to a published version, and issue
+delivery manifests for it.
+
+`review` reads an attempt's job manifest, checks that every candidate it lists exists and signs a
+short-lived GET URL for each one, so a reviewer can listen without a key. It writes nothing to B2. The
+URLs are bearer credentials: they are printed for the reviewer, or written with `--out` to a file only
+its owner can read, and they are never stored in the bucket or logged.
 
 `promote` copies the attempt's outputs inside B2 (server-side copy, no download) to
 `releases/deliveries/<job_id>/<version>/<language>/...` and writes `job-manifest.json` there last. That
@@ -45,6 +51,41 @@ def delivered_name(output_key: str, job_id: str) -> str:
     if not attempt or not name:
         raise ConfigError(f"the manifest names {output_key}, which is not a candidate of job {job_id}")
     return name
+
+
+def review_attempt(client: Any, bucket: str, job_id: str, attempt: str,
+                   expires: int = contracts.REVIEW_DEFAULT_EXPIRES_SECONDS, out: Path | None = None,
+                   now: datetime | None = None) -> dict[str, Any]:
+    """Sign a short-lived GET URL for every candidate of one attempt. Nothing is written to B2.
+
+    Without `out`, the result carries the URLs. With `out`, they go to that local file, readable by
+    its owner only, and the result carries none.
+    """
+    storage.check_id(job_id, "job id")
+    storage.check_id(attempt, "attempt")
+    check_seconds(expires, "--expires", contracts.REVIEW_MAX_EXPIRES_SECONDS)
+    moment = now or contracts.utc_now()
+    manifest = load_manifest(client, bucket, f"{storage.candidate_prefix(job_id, attempt)}{MANIFEST_NAME}",
+                             f"run submit for job {job_id} attempt {attempt} first")
+    if manifest["job_id"] != job_id:
+        raise ConfigError("the manifest's job id does not match the job it was stored under")
+    for output in manifest["outputs"]:
+        head = client.head_object(Bucket=bucket, Key=output["key"])  # every candidate must exist before signing
+        if head["ContentLength"] != output["size"]:
+            raise ConfigError(f"{output['key']} does not have the size its manifest records")
+    candidates = []
+    for output in manifest["outputs"]:
+        item = {name: output[name] for name in ("kind", "language", "speaker_id", "key", "sha256") if name in output}
+        item["url"] = storage.presign_get(client, bucket, output["key"], expires)
+        candidates.append(item)
+    review = {"job_id": job_id, "attempt": attempt, "review_status": manifest["review"]["status"],
+              "issued_at": contracts.stamp(moment),
+              "expires_at": contracts.stamp(moment + timedelta(seconds=expires)),
+              "expires_in_seconds": expires, "candidates": candidates}
+    if out is None:
+        return review
+    _write_private(out, review)
+    return dict(review, candidates=len(candidates), local_copy=str(out))
 
 
 def promote_attempt(client: Any, bucket: str, job_id: str, attempt: str, version: str, approved: bool,

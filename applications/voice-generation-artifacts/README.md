@@ -1,6 +1,6 @@
 # voice-generation-artifacts
 
-A small Python command-line tool that implements the [batch voice generation and dubbing](../../architectures/batch-voice-generation-and-dubbing/architecture.md) architecture on Backblaze B2: it hands a source recording to a worker through a presigned GET URL, keeps every output as an expiring candidate with one stem per speaker, promotes approved candidates to a published version by server-side copy with lineage, and issues a delivery manifest of presigned URLs.
+A small Python command-line tool that implements the [batch voice generation and dubbing](../../architectures/batch-voice-generation-and-dubbing/architecture.md) architecture on Backblaze B2: it checks that a current consent record permits generation for every speaker, hands a source recording to a worker through a presigned GET URL, keeps every output as an expiring candidate with one stem per speaker, signs short-lived URLs so reviewers can listen to the candidates, promotes approved candidates to a published version by server-side copy with lineage, and issues a delivery manifest of presigned URLs.
 
 **The audio it produces is synthetic placeholder audio.** The only worker in this repository, `PlaceholderWorker`, uses no model, no network service and no provider key. It writes audible tones of the source's duration, one stem per speaker and language plus a mix. It does not dub, translate or synthesize speech, and this tool adds no voice model and no provider adapter. The `Worker` interface is where one would plug in.
 
@@ -21,8 +21,9 @@ To try it against a bucket you own, follow [Setup](#setup) and the [walkthrough]
 
 | Command | What it does |
 |---|---|
-| `synth-source` | Writes a deterministic synthetic source recording to a local folder. With `--put` it also uploads it to `incoming/source/`. |
-| `submit` | Signs a short-lived GET URL for the source, runs the placeholder worker and stores its outputs as candidates under `work/candidates/<job>/<attempt>/`, with the job manifest written last. |
+| `synth-source` | Writes a deterministic synthetic source recording and one synthetic consent record per speaker (`--speaker`, by default `spk_a` and `spk_b`) to a local folder. The consent ids are `consent-<source_id>-<speaker>`, so runs with different source ids that share a bucket keep separate records. With `--put` it also uploads the source to `incoming/source/`, and with `--put-consents` it writes the consent records to `protected/consents/`. |
+| `submit` | Checks the consent records named with `--consent-id` (see [Consent](#consent)), signs a short-lived GET URL for the source, runs the placeholder worker and stores its outputs as candidates under `work/candidates/<job>/<attempt>/`, with the job manifest written last. |
+| `review` | Prints a short-lived presigned GET URL for every candidate of an attempt, so a reviewer can listen without a key. `--expires` defaults to 300 seconds and is at most 3600; `--out` writes the URLs to a file only its owner can read and prints a summary without them. It writes nothing to B2. |
 | `promote` | Copies an approved attempt inside B2 to `releases/deliveries/<job>/<version>/` and writes the version's `job-manifest.json` last, with the review decision and lineage. Needs `--approve`. |
 | `deliver` | Signs a GET URL for every object of a published version and stores a delivery manifest. `--expires` defaults to 3600 seconds. |
 
@@ -32,7 +33,8 @@ To try it against a bucket you own, follow [Setup](#setup) and the [walkthrough]
 - **Presigned GET URLs.** A worker that runs elsewhere, such as a hosted provider, reads the source from a URL that signs one object and expires, so it never holds a key. `submit` gives the worker such a URL, and `deliver` issues URLs to recipients.
 - **Server-side copy.** `promote` publishes a candidate with a copy request inside B2. The audio is not downloaded and uploaded again, so promotion does not depend on the operator's bandwidth.
 - **Lifecycle rules.** Candidates that are not promoted expire on their own. The template and command are in [Configurations it ships](#configurations-it-ships).
-- **Not B2's job.** The generation itself, the review of candidates and the consent decision stay in your application. This tool records the consent ids you pass to `submit` in the job manifest.
+- **Consent records next to the work.** Consent records live in the bucket under `protected/consents/`. `submit` reads them before it reads the source or writes anything, and records the consent ids in the job manifest.
+- **Not B2's job.** The generation itself, the review decision and granting or revoking consent stay in your application and your consent service.
 
 ## Setup
 
@@ -53,18 +55,38 @@ Install with `pip install -e .` (Python 3.10 or later). The runtime dependencies
 
 The source is generated from a fixed seed: a tone that stands in for a recording, so no person is recorded and no model is involved. Run the commands from an empty working folder; they write the demo files to `./demo` in the current directory.
 
+Each run uses its own source id and job id, so several people can follow these steps against one bucket. `synth-source` prints the consent ids it wrote as `consent_ids`.
+
 ```bash
-voice-generation-artifacts synth-source --out ./demo --put --source-id interview --seconds 4
-voice-generation-artifacts submit --source-id interview --job-id job-1 \
-  --target-language es --target-language fr --speaker spk_a --speaker spk_b
-# review the candidates under work/candidates/job-1/a1/, then:
-voice-generation-artifacts promote --job-id job-1 --attempt a1 --version v1 --approve
-voice-generation-artifacts deliver --job-id job-1 --version v1 --out ./demo/delivery.json
+RUN="$(date -u +%Y%m%d%H%M%S)"
+voice-generation-artifacts synth-source --out ./demo --put --put-consents --source-id "interview-$RUN" --seconds 4
+voice-generation-artifacts submit --source-id "interview-$RUN" --job-id "job-$RUN" \
+  --target-language es --target-language fr --speaker spk_a --speaker spk_b \
+  --consent-id "consent-interview-$RUN-spk_a" --consent-id "consent-interview-$RUN-spk_b"
+voice-generation-artifacts review --job-id "job-$RUN" --attempt a1 --out ./demo/review.json
+# listen to the candidates through the URLs in ./demo/review.json, then:
+voice-generation-artifacts promote --job-id "job-$RUN" --attempt a1 --version v1 --approve
+voice-generation-artifacts deliver --job-id "job-$RUN" --version v1 --out ./demo/delivery.json
 ```
 
-`submit` writes, for each target language, `<language>/mix.wav` and one `<language>/<speaker>.wav` stem per speaker, then `job-manifest.json`. `promote` writes the same paths under `releases/deliveries/job-1/v1/`. A change after review is a new attempt (`--attempt a2`) and, once approved, a new version.
+`submit` writes, for each target language, `<language>/mix.wav` and one `<language>/<speaker>.wav` stem per speaker, then `job-manifest.json`. `promote` writes the same paths under `releases/deliveries/<job>/v1/`. A change after review is a new attempt (`--attempt a2`) and, once approved, a new version.
 
 Each output's `expires_at` in the manifest is `--candidate-days` after the job was created (15 by default, which matches the 14 days to hide plus 1 day to delete in the lifecycle template). The manifest records when a candidate is expected to be removed; the removal itself is done by the lifecycle rule you apply.
+
+## Consent
+
+`submit` needs a `--consent-id` for the job's speakers and checks each record at `protected/consents/<consent_id>.json` before it reads the source or writes anything. A record is valid only when all of these hold, following the same rules as [`voice-dataset-ingest`](../voice-dataset-ingest/README.md) with `generation` as the required use:
+
+- it validates against [`consent-record.schema.json`](../../schemas/consent-record.schema.json) (an unchanged copy ships inside the package) and carries the consent id it is stored under;
+- `status` is `active`, and `expires_at` is absent or in the future;
+- `permitted_uses` includes `generation`;
+- `subject.speaker_id` is one of the job's speakers.
+
+Every speaker of the job must be covered by at least one valid record. Otherwise `submit` exits with code 2, names the consent or the speaker in its message and writes nothing. `synth-source --put-consents` writes synthetic records that pass these checks; in production your consent service writes them.
+
+## Review URLs
+
+`review` reads the attempt's job manifest, confirms that every candidate exists with the size the manifest records, and signs one GET URL per candidate. The URLs are bearer credentials, handled like the delivery manifest's: they are never stored in the bucket or logged, `--out` writes them to a file only its owner can read, and the default lifetime of 300 seconds (at most 3600) is just long enough to listen. The reviewer needs no key. The decision is then confirmed with `promote --approve`.
 
 ## Delivery manifest
 
@@ -82,7 +104,7 @@ Each output's `expires_at` in the manifest is `--candidate-days` after the job w
 | Code | Meaning |
 |---|---|
 | 0 | Done |
-| 2 | Rejected: an identifier, a language, a speaker, an expiry or a source did not pass its check, or `promote` was run without `--approve`. Nothing is written to B2 for that command |
+| 2 | Rejected: an identifier, a language, a speaker, an expiry, a source or a consent record did not pass its check, `review` named an attempt that does not exist, or `promote` was run without `--approve`. Nothing is written to B2 for that command |
 | 1 | Any other error: a B2 error, a missing setting, an attempt or version that already exists, a candidate that no longer matches its manifest |
 
 ## Key capabilities per command
@@ -91,8 +113,9 @@ Create the application key with only what the commands you run need, and limit i
 
 | Command | Capabilities |
 |---|---|
-| `synth-source --put` | `writeFiles` |
-| `submit` | `readFiles`, `listFiles` (to refuse an attempt that exists), `writeFiles` |
+| `synth-source --put`, `synth-source --put-consents` | `writeFiles` |
+| `submit` | `readFiles` (the consent records and the source), `listFiles` (to refuse an attempt that exists), `writeFiles` |
+| `review` | `readFiles` |
 | `promote` | `readFiles`, `listFiles`, `writeFiles` |
 | `deliver` | `readFiles`, `writeFiles` |
 
@@ -103,6 +126,7 @@ Never give this tool a key with `deleteFiles`. Capability names are from the [B2
 | Prefix | Written by | Content |
 |---|---|---|
 | `incoming/source/<source_id>.wav` | `synth-source --put` | A synthetic source recording |
+| `protected/consents/<consent_id>.json` | `synth-source --put-consents` only | A synthetic consent record; your consent service writes real ones |
 | `work/candidates/<job>/<attempt>/<language>/mix.wav` | `submit` | The mix of a language, synthetic placeholder audio |
 | `work/candidates/<job>/<attempt>/<language>/<speaker>.wav` | `submit` | The stem of one speaker in one language |
 | `work/candidates/<job>/<attempt>/job-manifest.json` | `submit` | The job manifest, written last. It records the source key, version and SHA-256, the worker, each output's key, size, SHA-256 and expiry, and the review status `pending` |
@@ -138,7 +162,7 @@ python -m pytest -q
 - The tests start a moto server on `127.0.0.1` (a real server is needed because presigned URLs are fetched over HTTP) and use the fake credential `testing`. They need no network beyond the loopback interface and no B2 account.
 - Test data is generated by `src/voice_generation_artifacts/synth.py` from a fixed seed. No test reads or writes `testdata/synthetic-speech/`.
 - `tests/test_live.py` is skipped unless `RUN_B2_LIVE_TESTS=1` and the `B2_*` variables are set. It is not run in CI. It writes only under `live-test/<uuid>/` and deletes what it writes (its key needs `deleteFiles` for that run). Against a real bucket it checks a put, a server-side copy, a presigned GET, and that a presigned GET URL signed for 3 seconds works at first and is refused after that. Real B2 was observed to answer HTTP 401 for an expired presigned URL on 2026-10-16; that is observed behaviour, not a documented guarantee, so the test accepts 401 or 403. It was run once on 2026-10-16 against a real B2 test bucket and passed: authentication and the endpoint derived from the region, put, get, list, server-side copy, a presigned GET through the real endpoint, delete, and presigned URL expiry (an expired URL is refused).
-- What the tests cover: audible and repeatable placeholder audio, the job manifest against its schema, candidates only under the candidates prefix, stems per speaker, server-side copy with lineage, a version that is never rewritten, the delivery manifest written last, presigned URLs that work and expire as declared, the default and maximum lifetime, that no request configures a bucket, and where the env file is read from.
+- What the tests cover: audible and repeatable placeholder audio, the job manifest against its schema, the consent check (a missing, revoked, expired or invalid record, a record without `generation`, another speaker, a speaker without consent: each refused with exit code 2 before the source is read and with nothing written), `review` URLs that read the candidates with the default and maximum lifetime and write nothing to B2, candidates only under the candidates prefix, stems per speaker, server-side copy with lineage, a version that is never rewritten, the delivery manifest written last, presigned URLs that work and expire as declared, the default and maximum lifetime, that no request configures a bucket, and where the env file is read from.
 
 ## Known limitations
 
@@ -147,7 +171,7 @@ python -m pytest -q
 - **The commands were run once by hand against a real bucket.** On 2026-10-26 a manual walkthrough (not `tests/test_live.py`) ran against a real B2 test bucket with Object Lock and SSE-B2, using a key without `deleteFiles`: `synth-source --put`, `submit` (two languages, two speakers, six outputs), `promote --approve` (six objects copied to the version prefix) and `deliver` (seven presigned URLs, all answered 200; an unsigned GET answered 401). The job manifest was the last object written under the candidate prefix and under the version prefix, the six delivered objects matched the SHA-256 values in the manifest, the manifest held no signed URL, and the objects reported server-side encryption AES256 and no Object Lock retention, because the tool sets none. A repeated `submit` of an attempt (exit 1), `promote` without `--approve` (exit 2), a repeated `promote` of a version (exit 1), an out-of-range `--expires`, a bad source id, a missing source and a nonexistent attempt (exit 2) were refused. Lifecycle expiry of candidates and cleanup were not observed (the key has no `deleteFiles`); only the `expires_at` field in the manifest was.
 - **No provider and no bucket configuration were involved.** ElevenLabs, Deepgram and AssemblyAI were not called, and no lifecycle, CORS, notification or other bucket configuration was applied or read; those templates are checked for shape only.
 - **Single organization, single bucket.** There is no per-tenant isolation or per-tenant prefix. Production deployments use one bucket per zone.
-- **Review, consent and scheduling stay with the operator.** Review is a decision you make and confirm with `--approve`, and consent decisions belong to your consent service. Running commands, retrying and scheduling are handled by whoever operates the tool.
+- **Review decisions, consent records and scheduling belong to the operator.** `review` gives reviewers short-lived URLs, and the decision is confirmed with `promote --approve`. Your consent service grants and revokes the records that `submit` checks. Running commands, retrying and scheduling are handled by whoever operates the tool.
 - **A failed promotion needs a new version name.** The tool refuses to write into a version prefix that already holds objects, and it has no `deleteFiles`, so objects left by a failed copy stay until you remove them. They carry no `job-manifest.json`, so they are not a published version.
 - **Lifecycle rules remove candidates and delivery manifests.** The tool holds no `deleteFiles`; the lifecycle rules you apply expire them.
 - **Withdrawal is an operator action.** Presigned URLs already issued work until they expire, and copies already delivered stay with their recipients. Removing a published version is an operator step outside the tool.
@@ -155,4 +179,4 @@ python -m pytest -q
 
 ## When to use it
 
-Use it to see, in a few hundred lines, how candidates, review, promotion by copy, lineage and bearer-style delivery manifests fit together on B2, or as a starting point for a job runner: replace `PlaceholderWorker` with an adapter for your provider or model. It is a reference implementation; a production pipeline adds the provider adapter, review tooling and scheduling your deployment needs.
+Use it to see, in a few hundred lines, how consent checks, candidates, review, promotion by copy, lineage and bearer-style delivery manifests fit together on B2, or as a starting point for a job runner: replace `PlaceholderWorker` with an adapter for your provider or model. It is a reference implementation; a production pipeline adds the provider adapter, a review interface and scheduling your deployment needs.

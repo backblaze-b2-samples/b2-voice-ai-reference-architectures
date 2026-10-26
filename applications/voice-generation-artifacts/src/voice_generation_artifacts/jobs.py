@@ -1,6 +1,8 @@
 """Submit a generation job: run the worker and keep every output as an expiring candidate.
 
-`submit` reads the source, signs a short-lived GET URL for it (what a hosted provider would
+`submit` first checks the consent records (see `consent.py`): every consent id must be active, unexpired
+and permit generation for one of the job's speakers, and every speaker must be covered. It then reads
+the source, signs a short-lived GET URL for it (what a hosted provider would
 receive), runs the worker, checks every output with `shared/audio_checks.py` and writes the outputs to
 `work/candidates/<job_id>/<attempt>/<language>/`: one mix per language and one stem per speaker. The
 job manifest is written last, so a job exists only when all of its outputs are stored. A candidate
@@ -17,7 +19,7 @@ from typing import Any, Sequence
 
 from botocore.exceptions import ClientError
 
-from . import contracts, storage
+from . import consent, contracts, storage
 from .errors import ConfigError, Conflict, Rejected
 from .shared import audio_checks
 from .worker import Worker, WorkerRequest
@@ -39,9 +41,9 @@ def check_unique(values: Sequence[str], label: str, pattern: Any) -> tuple[str, 
     return tuple(values)
 
 
-def check_seconds(value: Any, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= contracts.MAX_EXPIRES_SECONDS:
-        raise Rejected(f"{label} must be a whole number of seconds from 1 to {contracts.MAX_EXPIRES_SECONDS}")
+def check_seconds(value: Any, label: str, maximum: int = contracts.MAX_EXPIRES_SECONDS) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= maximum:
+        raise Rejected(f"{label} must be a whole number of seconds from 1 to {maximum}")
     return value
 
 
@@ -73,12 +75,16 @@ def submit_job(client: Any, bucket: str, worker: Worker, *, source_id: str, targ
     languages = check_unique(target_languages, "target language", storage.LANG_PATTERN)
     names = check_unique(speakers, "speaker", storage.SPEAKER_PATTERN)
     storage.check_id(source_language, "source language", storage.LANG_PATTERN)
-    consents = check_unique(consent_ids, "consent id", storage.ID_PATTERN) if consent_ids else ()
+    if not consent_ids:
+        raise Rejected("give a --consent-id for every speaker; consent is checked before generation")
+    consents = check_unique(consent_ids, "consent id", storage.ID_PATTERN)
     if kind not in JOB_KINDS:
         raise Rejected(f"kind must be one of {', '.join(JOB_KINDS)}")
     check_seconds(source_expires, "--source-expires")
     if not isinstance(candidate_days, int) or isinstance(candidate_days, bool) or not 1 <= candidate_days <= MAX_CANDIDATE_DAYS:
         raise Rejected(f"--candidate-days must be a whole number of days from 1 to {MAX_CANDIDATE_DAYS}")
+
+    consent.require_consents(client, bucket, consents, names, moment)  # reads only; refuses before any write
 
     prefix = storage.candidate_prefix(job_id, attempt)
     if storage.list_keys(client, bucket, prefix):
@@ -125,9 +131,8 @@ def submit_job(client: Any, bucket: str, worker: Worker, *, source_id: str, targ
         "parameters": {"source_language": source_language, "target_languages": list(languages), "speakers": list(names)},
         "outputs": records,
         "review": {"status": "pending"},
+        "consent_ids": list(consents),
     }
-    if consents:
-        manifest["consent_ids"] = list(consents)
     contracts.validate(contracts.JOB_SCHEMA, manifest, "the job manifest")
     manifest_key = f"{prefix}{MANIFEST_NAME}"
     storage.put_json(client, bucket, manifest_key, manifest)  # last: the job exists now

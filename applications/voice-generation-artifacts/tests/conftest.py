@@ -70,8 +70,19 @@ class Lab:
         storage.put_bytes(self.admin, self.bucket, storage.source_key(source_id), data, "audio/wav")
         return source_id
 
+    def consent(self, speaker_id: str, consent_id: str | None = None, **fields: Any) -> str:
+        """Put a synthetic consent record into the protected zone, as a consent service would have."""
+        consent_id = consent_id or f"consent-{speaker_id}"
+        storage.put_json(self.admin, self.bucket, storage.consent_key(consent_id),
+                         synth.consent_record(consent_id, speaker_id, **fields))
+        return consent_id
+
     def submit(self, source_id: str = "src-1", job_id: str = "job-1", attempt: str = "a1",
                languages: tuple[str, ...] = ("es",), speakers: tuple[str, ...] = ("spk_a", "spk_b"), **fields: Any) -> dict:
+        """Submit a job. Without `consent_ids`, an active consent is put for every valid speaker first."""
+        if "consent_ids" not in fields:
+            fields["consent_ids"] = tuple(self.consent(speaker) for speaker in speakers
+                                          if storage.SPEAKER_PATTERN.match(speaker))
         return jobs.submit_job(self.client, self.bucket, PlaceholderWorker(), source_id=source_id, job_id=job_id,
                                attempt=attempt, target_languages=languages, speakers=speakers, **fields)
 

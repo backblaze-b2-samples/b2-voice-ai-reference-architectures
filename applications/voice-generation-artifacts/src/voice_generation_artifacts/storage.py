@@ -23,6 +23,7 @@ SOURCES = "incoming/source/"
 CANDIDATES = "work/candidates/"
 DELIVERIES = "releases/deliveries/"
 DELIVERY_MANIFESTS = "releases/delivery-manifests/"
+CONSENTS = "protected/consents/"
 
 ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 SPEAKER_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
@@ -64,6 +65,10 @@ def check_id(value: str, label: str, pattern: re.Pattern[str] = ID_PATTERN) -> s
 
 def source_key(source_id: str) -> str:
     return f"{SOURCES}{source_id}.wav"
+
+
+def consent_key(consent_id: str) -> str:
+    return f"{CONSENTS}{consent_id}.json"
 
 
 def candidate_prefix(job_id: str, attempt: str) -> str:

@@ -1,7 +1,8 @@
 """The JSON schemas of the manifests this application writes, and validation against them.
 
-The schemas are unchanged copies of `schemas/generation-job-manifest.schema.json` and
-`schemas/delivery-manifest.schema.json` at the repository root, shipped as package data.
+The schemas are unchanged copies of `schemas/generation-job-manifest.schema.json`,
+`schemas/delivery-manifest.schema.json` and `schemas/consent-record.schema.json` at the repository
+root, shipped as package data.
 """
 from __future__ import annotations
 
@@ -18,8 +19,11 @@ from .errors import ConfigError
 SCHEMA_DIR = Path(__file__).resolve().parent / "schemas"
 JOB_SCHEMA = "generation-job-manifest.schema.json"
 DELIVERY_SCHEMA = "delivery-manifest.schema.json"
+CONSENT_SCHEMA = "consent-record.schema.json"
 MAX_EXPIRES_SECONDS = 604800  # the maximum in the delivery manifest schema and the longest B2 presigned URL
 DEFAULT_EXPIRES_SECONDS = 3600
+REVIEW_DEFAULT_EXPIRES_SECONDS = 300  # review URLs: long enough to listen, short enough to share with care
+REVIEW_MAX_EXPIRES_SECONDS = 3600
 
 
 @lru_cache(maxsize=None)
